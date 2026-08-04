@@ -1,0 +1,583 @@
+import React, { useState, useEffect } from 'react';
+import { getData } from '../utils/storage';
+
+/* ─── Helpers ─────────────────────────────────────────────────────────── */
+
+function getYtId(url) {
+  if (!url) return null;
+  const m = url.match(
+    /(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/))([a-zA-Z0-9_-]{11})/
+  );
+  return m ? m[1] : null;
+}
+
+function getIgEmbed(url) {
+  if (!url) return null;
+  const m = url.match(/instagram\.com\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
+  return m ? `https://www.instagram.com/${m[1]}/${m[2]}/embed/` : null;
+}
+
+function getHostname(url) {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch { return url; }
+}
+
+/* ─── YouTube Card ────────────────────────────────────────────────────── */
+
+function YoutubeCard({ item }) {
+  const [muted, setMuted] = useState(true);
+  const videoId = getYtId(item.url);
+  if (!videoId) return null;
+
+  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&loop=1&playlist=${videoId}`;
+
+  return (
+    <div className="yt-card">
+      <div className="yt-frame">
+        <iframe
+          key={muted ? 'muted' : 'unmuted'}
+          src={src}
+          title={item.heading || 'YouTube video'}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="yt-iframe"
+          loading="lazy"
+        />
+        <button
+          className="mute-btn"
+          onClick={() => setMuted(m => !m)}
+          title={muted ? 'Unmute' : 'Mute'}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
+      </div>
+      {(item.heading || item.description) && (
+        <div className="card-body">
+          {item.heading && <p className="card-heading">{item.heading}</p>}
+          {item.description && <p className="card-desc">{item.description}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Instagram Card ──────────────────────────────────────────────────── */
+
+function InstagramCard({ item }) {
+  const embed = getIgEmbed(item.url);
+  if (!embed) return null;
+  return (
+    <div className="ig-card">
+      <div className="ig-frame">
+        <iframe
+          src={embed}
+          title={item.heading || 'Instagram reel'}
+          scrolling="no"
+          allowTransparency="true"
+          allow="encrypted-media"
+          className="ig-iframe"
+          loading="lazy"
+        />
+      </div>
+      {(item.heading || item.description) && (
+        <div className="card-body">
+          {item.heading && <p className="card-heading">{item.heading}</p>}
+          {item.description && <p className="card-desc">{item.description}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Website Card ────────────────────────────────────────────────────── */
+
+function WebsiteCard({ item }) {
+  const host = getHostname(item.url);
+  const favicon = `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
+  return (
+    <a href={item.url} target="_blank" rel="noreferrer" className="site-card">
+      <div className="site-favicon-wrap">
+        <img
+          src={favicon}
+          alt={host}
+          className="site-favicon"
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+      </div>
+      <p className="site-heading">{item.heading || host}</p>
+      {item.description && <p className="site-desc">{item.description}</p>}
+      <div className="site-footer">
+        <span className="site-badge">{host}</span>
+        <span className="site-arrow">Visit ↗</span>
+      </div>
+    </a>
+  );
+}
+
+/* ─── SVG Icons ───────────────────────────────────────────────────────── */
+
+export function VideoIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
+      <rect width="24" height="24" rx="6" fill="url(#video-grad-pf)"/>
+      <path d="M9.5 8.5L16.5 12L9.5 15.5V8.5Z" fill="white"/>
+      <defs>
+        <linearGradient id="video-grad-pf" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#e1306c"/>
+          <stop offset="100%" stopColor="#ff0000"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function InstagramIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
+      <rect x="2" y="2" width="20" height="20" rx="5" fill="url(#ig-grad-pf)" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" stroke="white" strokeWidth="2.5" strokeLinecap="round"/>
+      <defs>
+        <linearGradient id="ig-grad-pf" x1="2" y1="22" x2="22" y2="2" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#fdf497" />
+          <stop offset="15%" stopColor="#fdf497" />
+          <stop offset="45%" stopColor="#fd5949" />
+          <stop offset="60%" stopColor="#d6249f" />
+          <stop offset="100%" stopColor="#285AEB" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+}
+
+export function YoutubeIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
+      <path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-1.96C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 1.96A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-1.96 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.37z" fill="#FF0000"/>
+      <polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" fill="#FFFFFF"/>
+    </svg>
+  );
+}
+
+export function WebsiteIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#00b4d8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
+
+/* ─── Tab config ──────────────────────────────────────────────────────── */
+
+const TABS = [
+  { key: 'instagram', label: 'Instagram Reels', icon: <InstagramIcon size={18} />, accent: '#e1306c', type: 'instagram' },
+  { key: 'youtube',   label: 'YouTube Videos',  icon: <YoutubeIcon size={20} />,   accent: '#ff0000', type: 'youtube' },
+  { key: 'websites',  label: 'Websites',        icon: <WebsiteIcon size={18} />,  accent: '#00b4d8', type: 'website' },
+];
+
+/* ─── Portfolio Page ──────────────────────────────────────────────────── */
+
+export default function Portfolio() {
+  const [data, setData] = useState(getData);
+
+  const getTabFromHash = () => {
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    if (hash === 'websites' || hash === 'website') return 'websites';
+    if (hash === 'youtube') return 'youtube';
+    return 'instagram';
+  };
+
+  const [activeTab, setActiveTab] = useState(getTabFromHash);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (hash === 'websites' || hash === 'website') {
+        setActiveTab('websites');
+      } else if (hash === 'youtube') {
+        setActiveTab('youtube');
+      } else if (hash === 'instagram') {
+        setActiveTab('instagram');
+      } else if (hash === 'videos') {
+        setActiveTab(prev => (prev === 'youtube' || prev === 'instagram' ? prev : 'instagram'));
+      }
+    };
+    const onFocus = () => setData(getData());
+
+    window.addEventListener('hashchange', onHashChange);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
+  const handleTabClick = (key) => {
+    setActiveTab(key);
+    if (key === 'instagram' || key === 'youtube') {
+      window.location.hash = '#videos';
+    } else {
+      window.location.hash = '#websites';
+    }
+  };
+
+  // Fixed logo
+  const logoSrc = '/New_Logo.png';
+
+  const tab = TABS.find(t => t.key === activeTab) || TABS[0];
+  const accent = tab.accent;
+
+  const relevantCats = data.categories
+    .map(cat => ({ ...cat, items: cat.items.filter(i => i.type === tab.type) }))
+    .filter(cat => cat.items.length > 0);
+
+  return (
+    <div className="pf">
+      <style>{CSS}</style>
+
+      {/* ── Header ── */}
+      <header className="pf-header">
+        <div className="pf-header-inner">
+          {/* Logo */}
+          <div className="pf-logo-wrap">
+            <img
+              src={logoSrc}
+              alt="Logo"
+              className="pf-logo-img"
+              onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+            />
+            <div className="pf-logo-ph" style={{ display: 'none' }}>S</div>
+          </div>
+
+          {/* Title */}
+          <h1 className="pf-title">Portfolio</h1>
+        </div>
+      </header>
+
+      {/* ── Tabs ── */}
+      <nav className="pf-tabs">
+        <div className="pf-tabs-inner">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              className={`pf-tab ${activeTab === t.key ? 'pf-tab--active' : ''}`}
+              style={activeTab === t.key ? { color: t.accent, '--tab-accent': t.accent } : {}}
+              onClick={() => handleTabClick(t.key)}
+            >
+              <span className="pf-tab-icon">{t.icon}</span>
+              {t.label}
+              {activeTab === t.key && (
+                <span className="pf-tab-indicator" style={{ background: t.accent }} />
+              )}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* ── Content ── */}
+      <main className="pf-main">
+        {relevantCats.length === 0 ? (
+          <div className="pf-empty">
+            <div className="pf-empty-icon">{tab.icon}</div>
+            <p className="pf-empty-title">No {tab.label} content yet</p>
+            <p className="pf-empty-sub">
+              Go to <a href="#admin" className="pf-empty-link">Admin</a> and add some {tab.label.toLowerCase()} links.
+            </p>
+          </div>
+        ) : (
+          relevantCats.map(cat => (
+            <section key={cat.id} className="pf-cat">
+              {/* Category heading */}
+              <div className="pf-cat-header">
+                <span className="pf-cat-pill" style={{ background: accent }} />
+                <h2 className="pf-cat-name">{cat.name}</h2>
+                <span className="pf-cat-count">{cat.items.length} item{cat.items.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              {/* Grid */}
+              <div className={`pf-grid pf-grid--${activeTab}`}>
+                {activeTab === 'instagram' && cat.items.map(item => (
+                  <InstagramCard key={item.id} item={item} />
+                ))}
+                {activeTab === 'youtube' && cat.items.map(item => (
+                  <YoutubeCard key={item.id} item={item} />
+                ))}
+                {activeTab === 'websites' && cat.items.map(item => (
+                  <WebsiteCard key={item.id} item={item} />
+                ))}
+              </div>
+            </section>
+          ))
+        )}
+      </main>
+
+      <footer className="pf-footer">
+        <span>© {new Date().getFullYear()} {data.portfolioTitle || 'Portfolio'} · Built with ♥</span>
+      </footer>
+    </div>
+  );
+}
+
+/* ─── Styles ──────────────────────────────────────────────────────────── */
+
+const CSS = `
+  .pf {
+    --bg: #f4f5f9;
+    --surface: #ffffff;
+    --surface-2: #edeef5;
+    --border: rgba(0,0,0,0.08);
+    --text: #1a1020;
+    --muted: #6b7280;
+    --accent: #4d2c7b;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+  }
+  .pf * { box-sizing: border-box; }
+  .pf a { text-decoration: none; color: inherit; }
+
+  /* ── Header ── */
+  .pf-header {
+    position: sticky; top: 0; z-index: 100;
+    background: #4d2c7b;
+    box-shadow: 0 2px 16px rgba(77,44,123,0.25);
+  }
+  .pf-header-inner {
+    max-width: 1440px; margin: 0 auto;
+    padding: 12px 40px;
+    display: flex; align-items: center;
+    position: relative;
+  }
+  .pf-logo-wrap { flex: 1; display: flex; align-items: center; }
+  .pf-logo-img { height: 48px; width: auto; object-fit: contain; border-radius: 0; }
+  .pf-logo-ph {
+    width: 48px; height: 48px; border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #fff;
+    letter-spacing: -0.02em; border: 2px solid rgba(255,255,255,0.3);
+  }
+  .pf-title {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+    white-space: nowrap; color: #ffffff;
+  }
+  .pf-admin-link {
+    margin-left: auto;
+    font-size: 12px; color: rgba(255,255,255,0.75);
+    padding: 6px 14px;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 20px;
+    transition: all 0.2s; letter-spacing: 0.04em;
+  }
+  .pf-admin-link:hover { color: #fff; border-color: rgba(255,255,255,0.55); background: rgba(255,255,255,0.1); }
+
+  /* ── Tabs ── */
+  .pf-tabs {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 73px; z-index: 90;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .pf-tabs-inner {
+    max-width: 1440px; margin: 0 auto; padding: 0 40px;
+    display: flex; justify-content: center; gap: 4px;
+  }
+  .pf-tab {
+    position: relative; display: flex; align-items: center; gap: 7px;
+    padding: 16px 28px;
+    font-size: 14px; font-weight: 500; color: var(--muted);
+    background: none; border: none; cursor: pointer; font-family: inherit;
+    transition: color 0.2s;
+  }
+  .pf-tab:hover { color: #4d2c7b; }
+  .pf-tab--active { font-weight: 600; color: #4d2c7b !important; }
+  .pf-tab-icon { font-size: 16px; }
+  .pf-tab-indicator {
+    position: absolute; bottom: -1px; left: 0; right: 0;
+    height: 3px; border-radius: 3px 3px 0 0;
+  }
+
+  /* ── Main ── */
+  .pf-main { max-width: 1440px; margin: 0 auto; padding: 56px 40px 40px; }
+
+  /* ── Category ── */
+  .pf-cat { margin-bottom: 72px; }
+  .pf-cat-header {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 28px;
+  }
+  .pf-cat-pill { width: 5px; height: 32px; border-radius: 3px; flex-shrink: 0; background: #4d2c7b !important; }
+  .pf-cat-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #1a1020;
+  }
+  .pf-cat-count {
+    font-size: 12px; color: var(--muted);
+    background: #ede9f6; color: #4d2c7b; font-weight: 600;
+    padding: 4px 10px; border-radius: 20px;
+  }
+
+  /* ── Grids ── */
+  .pf-grid--videos {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 20px;
+    align-items: start;
+  }
+  .pf-grid--instagram {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .pf-grid--youtube {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+  }
+  .pf-grid--websites {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 14px;
+  }
+
+  /* ── YouTube Card ── */
+  .yt-card {
+    background: var(--surface); border-radius: 16px;
+    overflow: hidden; border: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .yt-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(77,44,123,0.15); }
+  .yt-frame { position: relative; width: 100%; padding-top: 56.25%; background: #000; }
+  .yt-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .mute-btn {
+    position: absolute; bottom: 10px; right: 10px; z-index: 5;
+    width: 36px; height: 36px; border-radius: 50%;
+    background: rgba(0,0,0,0.72); color: white; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; border: none;
+    backdrop-filter: blur(6px);
+    transition: transform 0.15s, background 0.15s;
+  }
+  .mute-btn:hover { transform: scale(1.12); background: rgba(77,44,123,0.92); }
+
+  /* ── Instagram Card ── */
+  .ig-card {
+    background: var(--surface); border-radius: 16px;
+    overflow: hidden; border: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .ig-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(77,44,123,0.15); }
+  .ig-frame { background: #000; height: 520px; }
+  .ig-iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  /* ── Card body (shared) ── */
+  .card-body { padding: 14px 16px; }
+  .card-heading {
+    font-size: 14px; font-weight: 600; margin: 0 0 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card-desc {
+    font-size: 12px; color: var(--muted); margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+
+  /* ── Website Card ── */
+  .site-card {
+    display: flex; flex-direction: column; gap: 10px;
+    background: var(--surface); border-radius: 16px; padding: 18px;
+    border: 1px solid var(--border);
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    cursor: pointer; transition: all 0.22s;
+    min-height: 160px;
+  }
+  .site-card:hover {
+    border-color: #4d2c7b;
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(77,44,123,0.18);
+  }
+  .site-favicon-wrap {
+    width: 40px; height: 40px;
+    background: #f0ecf8; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+  }
+  .site-favicon { width: 32px; height: 32px; object-fit: contain; display: block; }
+  .site-heading {
+    font-size: 13px; font-weight: 700; color: #1a1020;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.4;
+  }
+  .site-desc {
+    font-size: 11px; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.5; flex: 1;
+  }
+  .site-footer {
+    display: flex; align-items: center; justify-content: space-between; margin-top: auto;
+  }
+  .site-badge {
+    font-size: 10px; color: #4d2c7b;
+    background: #ede9f6; padding: 3px 8px; border-radius: 20px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%;
+  }
+  .site-arrow { font-size: 12px; font-weight: 700; color: #4d2c7b; }
+
+  /* ── Empty State ── */
+  .pf-empty {
+    text-align: center; padding: 120px 20px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
+  .pf-empty-icon { font-size: 48px; }
+  .pf-empty-title { font-size: 22px; font-weight: 700; color: #1a1020; }
+  .pf-empty-sub { font-size: 14px; color: var(--muted); }
+  .pf-empty-link { color: #4d2c7b; font-weight: 600; }
+  .pf-empty-link:hover { text-decoration: underline; }
+
+  /* ── Footer ── */
+  .pf-footer {
+    text-align: center; padding: 32px 24px;
+    color: var(--muted); font-size: 12px;
+    border-top: 1px solid var(--border);
+    background: #fff;
+    letter-spacing: 0.06em;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1280px) {
+    .pf-grid--websites { grid-template-columns: repeat(4, 1fr); }
+  }
+  @media (max-width: 1024px) {
+    .pf-grid--websites { grid-template-columns: repeat(3, 1fr); }
+    .pf-main { padding: 40px 28px 32px; }
+    .pf-header-inner { padding: 14px 28px; }
+    .pf-tabs-inner { padding: 0 28px; }
+  }
+  @media (max-width: 768px) {
+    .pf-title { font-size: 17px; }
+    .pf-tab { padding: 14px 18px; font-size: 13px; }
+    .pf-grid--websites { grid-template-columns: repeat(2, 1fr); }
+    .pf-grid--videos { grid-template-columns: 1fr; }
+    .pf-grid--instagram { grid-template-columns: 1fr; }
+    .pf-grid--youtube { grid-template-columns: 1fr; }
+    .pf-cat-name { font-size: 21px; }
+    .pf-main { padding: 32px 18px 24px; }
+    .pf-header-inner { padding: 12px 18px; }
+    .pf-tabs-inner { padding: 0 12px; justify-content: flex-start; overflow-x: auto; }
+  }
+  @media (max-width: 480px) {
+    .pf-grid--websites { grid-template-columns: repeat(2, 1fr); }
+    .pf-title { display: none; }
+  }
+
+  /* ── Motion ── */
+  @media (prefers-reduced-motion: reduce) {
+    .yt-card, .ig-card, .site-card { transition: none; }
+    .pf-tab-indicator { transition: none; }
+  }
+`;
