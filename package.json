@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "server": "cd server && npm run dev",
+    "server:start": "cd server && npm start",
     "build": "vite build",
     "preview": "vite preview",
     "predeploy": "npm run build",

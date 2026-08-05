@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getData } from '../utils/storage';
+import { fetchPortfolioData } from '../utils/api';
 
 /* ─── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -25,31 +26,23 @@ function getHostname(url) {
 /* ─── YouTube Card ────────────────────────────────────────────────────── */
 
 function YoutubeCard({ item }) {
-  const [muted, setMuted] = useState(true);
   const videoId = getYtId(item.url);
   if (!videoId) return null;
 
-  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${muted ? 1 : 0}&rel=0&modestbranding=1&loop=1&playlist=${videoId}`;
+  const isShort = item.isShort || (item.url && item.url.toLowerCase().includes('/shorts/'));
+  const src = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=1&loop=1&playlist=${videoId}&rel=0&modestbranding=1`;
 
   return (
-    <div className="yt-card">
-      <div className="yt-frame">
+    <div className={`yt-card ${isShort ? 'yt-card--short' : ''}`}>
+      <div className={`yt-frame ${isShort ? 'yt-frame--short' : ''}`}>
         <iframe
-          key={muted ? 'muted' : 'unmuted'}
           src={src}
-          title={item.heading || 'YouTube video'}
+          title={item.heading || (isShort ? 'YouTube Short' : 'YouTube video')}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           className="yt-iframe"
           loading="lazy"
         />
-        <button
-          className="mute-btn"
-          onClick={() => setMuted(m => !m)}
-          title={muted ? 'Unmute' : 'Mute'}
-        >
-          {muted ? '🔇' : '🔊'}
-        </button>
       </div>
       {(item.heading || item.description) && (
         <div className="card-body">
@@ -63,21 +56,53 @@ function YoutubeCard({ item }) {
 
 /* ─── Instagram Card ──────────────────────────────────────────────────── */
 
-function InstagramCard({ item }) {
+function InstagramCard({ item, isStopped, onActivate }) {
   const embed = getIgEmbed(item.url);
+  const iframeRef = useRef(null);
+
+  // When the user clicks INSIDE this iframe, the parent window loses focus
+  // and document.activeElement becomes this iframe element.
+  // We use this to detect interaction without needing a click-blocking overlay.
+  useEffect(() => {
+    const handleWindowBlur = () => {
+      if (document.activeElement === iframeRef.current) {
+        onActivate();
+      }
+    };
+    window.addEventListener('blur', handleWindowBlur);
+    return () => window.removeEventListener('blur', handleWindowBlur);
+  }, [onActivate]);
+
   if (!embed) return null;
+
+  // Stopped reels (previously played, now paused) get a blank src to kill audio.
+  // Fresh reels keep their normal src so Instagram loads the thumbnail.
+  const src = isStopped ? 'about:blank' : `${embed}?hidecaption=true`;
+
   return (
     <div className="ig-card">
-      <div className="ig-frame">
+      <div className="ig-clip">
         <iframe
-          src={embed}
+          ref={iframeRef}
+          src={src}
           title={item.heading || 'Instagram reel'}
           scrolling="no"
           allowTransparency="true"
-          allow="encrypted-media"
+          allow="encrypted-media; autoplay"
           className="ig-iframe"
           loading="lazy"
         />
+        {/* Only stopped reels show a replay overlay */}
+        {isStopped && (
+          <div className="ig-replay-overlay" onClick={onActivate}>
+            <div className="ig-play-btn">
+              <svg viewBox="0 0 24 24" width="28" height="28" fill="white">
+                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+              </svg>
+            </div>
+            <span className="ig-replay-label">Tap to replay</span>
+          </div>
+        )}
       </div>
       {(item.heading || item.description) && (
         <div className="card-body">
@@ -92,23 +117,30 @@ function InstagramCard({ item }) {
 /* ─── Website Card ────────────────────────────────────────────────────── */
 
 function WebsiteCard({ item }) {
-  const host = getHostname(item.url);
-  const favicon = `https://www.google.com/s2/favicons?domain=${host}&sz=64`;
   return (
     <a href={item.url} target="_blank" rel="noreferrer" className="site-card">
-      <div className="site-favicon-wrap">
-        <img
-          src={favicon}
-          alt={host}
-          className="site-favicon"
-          onError={e => { e.target.style.display = 'none'; }}
-        />
+      {/* Image thumbnail */}
+      <div className="site-img-wrap">
+        {item.image ? (
+          <img src={item.image} alt={item.heading || 'Website preview'} className="site-img" />
+        ) : (
+          <div className="site-img-placeholder">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="rgba(77,44,123,0.3)" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15l-5-5L5 21"/>
+            </svg>
+          </div>
+        )}
       </div>
-      <p className="site-heading">{item.heading || host}</p>
-      {item.description && <p className="site-desc">{item.description}</p>}
-      <div className="site-footer">
-        <span className="site-badge">{host}</span>
-        <span className="site-arrow">Visit ↗</span>
+
+      {/* Content */}
+      <div className="site-body">
+        {item.heading && <p className="site-heading">{item.heading}</p>}
+        {item.description && <p className="site-desc">{item.description}</p>}
+        <div className="site-visit-row">
+          <span className="site-visit-btn">Visit ↗</span>
+        </div>
       </div>
     </a>
   );
@@ -190,8 +222,42 @@ export default function Portfolio() {
   };
 
   const [activeTab, setActiveTab] = useState(getTabFromHash);
+  const [selectedCatId, setSelectedCatId] = useState('all');
+  const [activeReelId, setActiveReelId] = useState(null);
+  const [stoppedIds, setStoppedIds] = useState([]);
+
+  // Use a ref so activateReel always reads the latest activeReelId without stale closure
+  const activeReelIdRef = useRef(null);
+  useEffect(() => { activeReelIdRef.current = activeReelId; }, [activeReelId]);
+
+  // activateReel: stop the currently-playing reel (reset src) and start the new one.
+  // Also removes the newly-active reel from stoppedIds so its src is restored.
+  const activateReel = useCallback((id) => {
+    const prev = activeReelIdRef.current;
+    setStoppedIds(existing => {
+      // Remove the newly-active reel from stopped (so its src gets restored)
+      const cleaned = existing.filter(x => x !== id);
+      // Add the previously-active reel to stopped (so its audio is killed)
+      if (prev && prev !== id && !cleaned.includes(prev)) {
+        return [...cleaned, prev];
+      }
+      return cleaned;
+    });
+    setActiveReelId(id);
+  }, []);
+
+  const resetPlayback = useCallback(() => {
+    setActiveReelId(null);
+    setStoppedIds([]);
+  }, []);
 
   useEffect(() => {
+    const loadData = async () => {
+      const res = await fetchPortfolioData();
+      setData(res);
+    };
+    loadData();
+
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
       if (hash === 'websites' || hash === 'website') {
@@ -204,7 +270,7 @@ export default function Portfolio() {
         setActiveTab(prev => (prev === 'youtube' || prev === 'instagram' ? prev : 'instagram'));
       }
     };
-    const onFocus = () => setData(getData());
+    const onFocus = () => loadData();
 
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('focus', onFocus);
@@ -215,7 +281,9 @@ export default function Portfolio() {
   }, []);
 
   const handleTabClick = (key) => {
+    resetPlayback();
     setActiveTab(key);
+    setSelectedCatId(null);
     if (key === 'instagram' || key === 'youtube') {
       window.location.hash = '#videos';
     } else {
@@ -224,7 +292,7 @@ export default function Portfolio() {
   };
 
   // Fixed logo
-  const logoSrc = '/New_Logo.png';
+  const logoSrc = `${import.meta.env.BASE_URL}logo.png`;
 
   const tab = TABS.find(t => t.key === activeTab) || TABS[0];
   const accent = tab.accent;
@@ -232,6 +300,21 @@ export default function Portfolio() {
   const relevantCats = data.categories
     .map(cat => ({ ...cat, items: cat.items.filter(i => i.type === tab.type) }))
     .filter(cat => cat.items.length > 0);
+
+  // Active category defaults to the first category if available
+  const activeCatId = selectedCatId && relevantCats.some(c => c.id === selectedCatId)
+    ? selectedCatId
+    : (relevantCats[0]?.id || null);
+
+  const displayedCats = activeCatId
+    ? relevantCats.filter(cat => cat.id === activeCatId)
+    : relevantCats;
+
+  const websiteItems = data.categories
+    .flatMap(cat => cat.items.filter(i => i.type === 'website'));
+
+  const videoItems = displayedCats.flatMap(cat => cat.items);
+
 
   return (
     <div className="pf">
@@ -276,40 +359,73 @@ export default function Portfolio() {
         </div>
       </nav>
 
+      {/* ── Category Mosaic Sub-nav (for Instagram Reels & YouTube Videos) ── */}
+      {activeTab !== 'websites' && relevantCats.length > 0 && (
+        <div className="pf-mosaic-wrap">
+          <div className="pf-mosaic-inner">
+            {relevantCats.map(cat => {
+              const isActive = activeCatId === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  className={`pf-mosaic-chip ${isActive ? 'pf-mosaic-chip--active' : ''}`}
+                  onClick={() => { resetPlayback(); setSelectedCatId(cat.id); }}
+                >
+                  <span className="pf-chip-label">{cat.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Content ── */}
       <main className="pf-main">
-        {relevantCats.length === 0 ? (
-          <div className="pf-empty">
-            <div className="pf-empty-icon">{tab.icon}</div>
-            <p className="pf-empty-title">No {tab.label} content yet</p>
-            <p className="pf-empty-sub">
-              Go to <a href="#admin" className="pf-empty-link">Admin</a> and add some {tab.label.toLowerCase()} links.
-            </p>
-          </div>
-        ) : (
-          relevantCats.map(cat => (
-            <section key={cat.id} className="pf-cat">
-              {/* Category heading */}
-              <div className="pf-cat-header">
-                <span className="pf-cat-pill" style={{ background: accent }} />
-                <h2 className="pf-cat-name">{cat.name}</h2>
-                <span className="pf-cat-count">{cat.items.length} item{cat.items.length !== 1 ? 's' : ''}</span>
-              </div>
-
-              {/* Grid */}
-              <div className={`pf-grid pf-grid--${activeTab}`}>
-                {activeTab === 'instagram' && cat.items.map(item => (
-                  <InstagramCard key={item.id} item={item} />
-                ))}
-                {activeTab === 'youtube' && cat.items.map(item => (
-                  <YoutubeCard key={item.id} item={item} />
-                ))}
-                {activeTab === 'websites' && cat.items.map(item => (
+        {activeTab === 'websites' ? (
+          websiteItems.length === 0 ? (
+            <div className="pf-empty">
+              <div className="pf-empty-icon">{tab.icon}</div>
+              <p className="pf-empty-title">No {tab.label} content yet</p>
+              <p className="pf-empty-sub">
+                Go to <a href="#admin" className="pf-empty-link">Admin</a> and add some {tab.label.toLowerCase()} links.
+              </p>
+            </div>
+          ) : (
+            <section className="pf-cat">
+              <div className="pf-grid pf-grid--websites">
+                {websiteItems.map(item => (
                   <WebsiteCard key={item.id} item={item} />
                 ))}
               </div>
             </section>
-          ))
+          )
+        ) : (
+          videoItems.length === 0 ? (
+            <div className="pf-empty">
+              <div className="pf-empty-icon">{tab.icon}</div>
+              <p className="pf-empty-title">No {tab.label} content yet</p>
+              <p className="pf-empty-sub">
+                Go to <a href="#admin" className="pf-empty-link">Admin</a> and add some {tab.label.toLowerCase()} links.
+              </p>
+            </div>
+          ) : (
+            <section className="pf-cat">
+              <div className={`pf-grid pf-grid--${activeTab}`}>
+                {activeTab === 'instagram' && videoItems.map(item => (
+                  <InstagramCard
+                    key={item.id}
+                    item={item}
+                    isActive={activeReelId === item.id}
+                    isStopped={stoppedIds.includes(item.id)}
+                    onActivate={() => activateReel(item.id)}
+                  />
+                ))}
+                {activeTab === 'youtube' && videoItems.map(item => (
+                  <YoutubeCard key={item.id} item={item} />
+                ))}
+              </div>
+            </section>
+          )
         )}
       </main>
 
@@ -323,6 +439,8 @@ export default function Portfolio() {
 /* ─── Styles ──────────────────────────────────────────────────────────── */
 
 const CSS = `
+  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+
   .pf {
     --bg: #f4f5f9;
     --surface: #ffffff;
@@ -333,10 +451,10 @@ const CSS = `
     --accent: #4d2c7b;
     background: var(--bg);
     color: var(--text);
-    font-family: 'Inter', 'Space Grotesk', sans-serif;
+    font-family: 'Poppins', sans-serif;
     min-height: 100vh;
   }
-  .pf * { box-sizing: border-box; }
+  .pf * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
   .pf a { text-decoration: none; color: inherit; }
 
   /* ── Header ── */
@@ -357,12 +475,12 @@ const CSS = `
     width: 48px; height: 48px; border-radius: 50%;
     background: rgba(255,255,255,0.15);
     display: flex; align-items: center; justify-content: center;
-    font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 22px; color: #fff;
+    font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 22px; color: #fff;
     letter-spacing: -0.02em; border: 2px solid rgba(255,255,255,0.3);
   }
   .pf-title {
     position: absolute; left: 50%; transform: translateX(-50%);
-    font-family: 'Space Grotesk', sans-serif;
+    font-family: 'Poppins', sans-serif;
     font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
     white-space: nowrap; color: #ffffff;
   }
@@ -401,8 +519,47 @@ const CSS = `
     height: 3px; border-radius: 3px 3px 0 0;
   }
 
+  /* ── Mosaic Category Subnav ── */
+  .pf-mosaic-wrap {
+    background: transparent;
+    padding: 14px 40px 0;
+  }
+  .pf-mosaic-inner {
+    max-width: 1440px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+  }
+  .pf-mosaic-chip {
+    display: inline-flex; align-items: center;
+    padding: 9px 20px; border-radius: 999px;
+    font-size: 13px; font-weight: 600; font-family: 'Poppins', sans-serif; letter-spacing: 0.01em;
+    color: #4d2c7b; background: #ffffff;
+    border: 1.5px solid #c4aee8; cursor: pointer;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    user-select: none;
+  }
+  .pf-chip-label { flex: 1; white-space: nowrap; }
+  .pf-mosaic-chip:hover {
+    background: #ede9f6;
+    color: #3b1f5e;
+    border-color: #9b72d0;
+    box-shadow: 0 4px 14px rgba(77,44,123,0.15);
+  }
+  .pf-mosaic-chip--active {
+    background: #4d2c7b;
+    color: #ffffff;
+    border-color: #4d2c7b;
+    box-shadow: 0 4px 16px rgba(77,44,123,0.28);
+  }
+  .pf-mosaic-chip--active:hover {
+    background: #4d2c7b;
+    color: #ffffff;
+    border-color: #4d2c7b;
+    box-shadow: 0 4px 16px rgba(77,44,123,0.28);
+  }
+
   /* ── Main ── */
-  .pf-main { max-width: 1440px; margin: 0 auto; padding: 56px 40px 40px; }
+  .pf-main { max-width: 1440px; margin: 0 auto; padding: 40px 40px 40px; }
 
   /* ── Category ── */
   .pf-cat { margin-bottom: 72px; }
@@ -430,29 +587,54 @@ const CSS = `
   }
   .pf-grid--instagram {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+    align-items: start;
   }
   .pf-grid--youtube {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 22px;
+    align-items: start;
   }
   .pf-grid--websites {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 14px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
   }
 
   /* ── YouTube Card ── */
   .yt-card {
     background: var(--surface); border-radius: 16px;
     overflow: hidden; border: 1px solid var(--border);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    display: flex; flex-direction: column;
+    width: 100%;
   }
-  .yt-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(77,44,123,0.15); }
-  .yt-frame { position: relative; width: 100%; padding-top: 56.25%; background: #000; }
+  .yt-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(255,0,0,0.15);
+    border-color: #ff0000;
+  }
+  .yt-card--short {
+    /* Shorts show in same grid */
+  }
+  /* Standard video: 16:9 ratio */
+  .yt-frame {
+    position: relative; width: 100%;
+    padding-top: 56.25%;
+    background: #000;
+    overflow: hidden;
+  }
+  /* Shorts: native 9:16 vertical ratio framing */
+  .yt-frame--short {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    background: #000;
+    overflow: hidden;
+  }
   .yt-iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
   .mute-btn {
     position: absolute; bottom: 10px; right: 10px; z-index: 5;
@@ -473,8 +655,56 @@ const CSS = `
     transition: transform 0.2s, box-shadow 0.2s;
   }
   .ig-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(77,44,123,0.15); }
-  .ig-frame { background: #000; height: 520px; }
-  .ig-iframe { width: 100%; height: 100%; border: 0; display: block; }
+
+  /* Instagram Clip: native 9:16 aspect ratio framing */
+  .ig-clip {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 9 / 16;
+    overflow: hidden;
+    background: #000;
+    border-radius: 14px;
+  }
+  .ig-iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+  }
+  /* Play / Replay overlay — only shown on stopped (blank) reels */
+  .ig-replay-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(0,0,0,0.72);
+    transition: background 0.2s;
+  }
+  .ig-replay-overlay:hover { background: rgba(0,0,0,0.82); }
+  .ig-play-btn {
+    width: 62px; height: 62px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.15);
+    border: 2px solid rgba(255,255,255,0.5);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.18s, background 0.18s;
+  }
+  .ig-replay-overlay:hover .ig-play-btn {
+    transform: scale(1.1);
+    background: rgba(255,255,255,0.25);
+  }
+  .ig-replay-label {
+    color: rgba(255,255,255,0.85);
+    font-size: 12px; font-weight: 500;
+    letter-spacing: 0.3px;
+  }
 
   /* ── Card body (shared) ── */
   .card-body { padding: 14px 16px; }
@@ -489,44 +719,68 @@ const CSS = `
 
   /* ── Website Card ── */
   .site-card {
-    display: flex; flex-direction: column; gap: 10px;
-    background: var(--surface); border-radius: 16px; padding: 18px;
+    display: flex; flex-direction: column;
+    background: var(--surface); border-radius: 16px;
     border: 1px solid var(--border);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    cursor: pointer; transition: all 0.22s;
-    min-height: 160px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+    overflow: hidden;
+    cursor: pointer; transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    text-decoration: none; color: inherit;
+    height: 100%;
   }
   .site-card:hover {
     border-color: #4d2c7b;
-    transform: translateY(-3px);
-    box-shadow: 0 10px 28px rgba(77,44,123,0.18);
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(77,44,123,0.18);
   }
-  .site-favicon-wrap {
-    width: 40px; height: 40px;
-    background: #f0ecf8; border-radius: 10px;
+  /* Image box */
+  .site-img-wrap {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    background: #f0ecf8;
+    flex-shrink: 0;
+  }
+  .site-img {
+    width: 100%; height: 100%;
+    object-fit: cover; display: block;
+    transition: transform 0.3s ease;
+  }
+  .site-card:hover .site-img { transform: scale(1.05); }
+  .site-img-placeholder {
+    width: 100%; height: 100%;
     display: flex; align-items: center; justify-content: center;
-    overflow: hidden; flex-shrink: 0;
+    background: #f0ecf8;
   }
-  .site-favicon { width: 32px; height: 32px; object-fit: contain; display: block; }
+  /* Body */
+  .site-body {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 18px 20px 20px;
+    flex: 1;
+  }
   .site-heading {
-    font-size: 13px; font-weight: 700; color: #1a1020;
+    font-size: 16px; font-weight: 700; color: #1a1020;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    line-height: 1.4;
+    line-height: 1.35; margin: 0;
   }
   .site-desc {
-    font-size: 11px; color: var(--muted);
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    line-height: 1.5; flex: 1;
+    font-size: 13px; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.5; flex: 1; margin: 0;
   }
-  .site-footer {
-    display: flex; align-items: center; justify-content: space-between; margin-top: auto;
+  .site-visit-row {
+    margin-top: auto; padding-top: 12px;
+    display: flex; justify-content: flex-end;
   }
-  .site-badge {
-    font-size: 10px; color: #4d2c7b;
-    background: #ede9f6; padding: 3px 8px; border-radius: 20px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%;
+  .site-visit-btn {
+    font-size: 13px; font-weight: 700; color: #4d2c7b;
+    padding: 6px 16px; border-radius: 20px;
+    background: #ede9f6; border: 1px solid rgba(77,44,123,0.15);
+    transition: all 0.18s ease;
   }
-  .site-arrow { font-size: 12px; font-weight: 700; color: #4d2c7b; }
+  .site-card:hover .site-visit-btn {
+    background: #4d2c7b; color: #fff;
+  }
 
   /* ── Empty State ── */
   .pf-empty {
@@ -549,10 +803,14 @@ const CSS = `
   }
 
   /* ── Responsive ── */
-  @media (max-width: 1280px) {
+  @media (max-width: 1400px) {
+    .pf-grid--instagram { grid-template-columns: repeat(4, 1fr); }
+    .pf-grid--youtube { grid-template-columns: repeat(4, 1fr); }
     .pf-grid--websites { grid-template-columns: repeat(4, 1fr); }
   }
-  @media (max-width: 1024px) {
+  @media (max-width: 1100px) {
+    .pf-grid--instagram { grid-template-columns: repeat(3, 1fr); }
+    .pf-grid--youtube { grid-template-columns: repeat(3, 1fr); }
     .pf-grid--websites { grid-template-columns: repeat(3, 1fr); }
     .pf-main { padding: 40px 28px 32px; }
     .pf-header-inner { padding: 14px 28px; }
@@ -562,16 +820,18 @@ const CSS = `
     .pf-title { font-size: 17px; }
     .pf-tab { padding: 14px 18px; font-size: 13px; }
     .pf-grid--websites { grid-template-columns: repeat(2, 1fr); }
+    .pf-grid--instagram { grid-template-columns: repeat(2, 1fr); }
+    .pf-grid--youtube { grid-template-columns: repeat(2, 1fr); }
     .pf-grid--videos { grid-template-columns: 1fr; }
-    .pf-grid--instagram { grid-template-columns: 1fr; }
-    .pf-grid--youtube { grid-template-columns: 1fr; }
     .pf-cat-name { font-size: 21px; }
     .pf-main { padding: 32px 18px 24px; }
     .pf-header-inner { padding: 12px 18px; }
     .pf-tabs-inner { padding: 0 12px; justify-content: flex-start; overflow-x: auto; }
   }
   @media (max-width: 480px) {
-    .pf-grid--websites { grid-template-columns: repeat(2, 1fr); }
+    .pf-grid--websites { grid-template-columns: 1fr; }
+    .pf-grid--instagram { grid-template-columns: 1fr; }
+    .pf-grid--youtube { grid-template-columns: 1fr; }
     .pf-title { display: none; }
   }
 

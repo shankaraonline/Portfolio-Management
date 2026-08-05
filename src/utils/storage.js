@@ -50,6 +50,18 @@ export function deleteItem(catId, itemId) {
   return save(d);
 }
 
+export function updateItem(catId, itemId, updatedFields) {
+  const d = getData();
+  const cat = d.categories.find(c => c.id === catId);
+  if (cat) {
+    const idx = cat.items.findIndex(i => i.id === itemId);
+    if (idx !== -1) {
+      cat.items[idx] = { ...cat.items[idx], ...updatedFields };
+    }
+  }
+  return save(d);
+}
+
 export function updateMeta(updates) {
   return save({ ...getData(), ...updates });
 }

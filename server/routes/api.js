@@ -1,0 +1,136 @@
+import express from 'express';
+import Category from '../models/Category.js';
+
+const router = express.Router();
+
+function uid() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+}
+
+/* ── GET /api/portfolio ── */
+router.get('/portfolio', async (req, res) => {
+  try {
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch portfolio data', message: err.message });
+  }
+});
+
+/* ── POST /api/categories ── */
+router.post('/categories', async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Category name is required' });
+    }
+    const newCat = new Category({
+      id: uid(),
+      name: name.trim(),
+      items: []
+    });
+    await newCat.save();
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.status(201).json({ categories, category: newCat });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create category', message: err.message });
+  }
+});
+
+/* ── DELETE /api/categories/:id ── */
+router.delete('/categories/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Category.deleteOne({ id });
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete category', message: err.message });
+  }
+});
+
+/* ── POST /api/categories/:catId/items ── */
+router.post('/categories/:catId/items', async (req, res) => {
+  try {
+    const { catId } = req.params;
+    const { type, url, heading, description, image } = req.body;
+
+    if (!url || !url.trim()) {
+      return res.status(400).json({ error: 'URL is required' });
+    }
+
+    const cat = await Category.findOne({ id: catId });
+    if (!cat) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    const newItem = {
+      id: uid(),
+      type: type || 'instagram',
+      url: url.trim(),
+      heading: heading || '',
+      description: description || '',
+      image: image || ''
+    };
+
+    cat.items.push(newItem);
+    await cat.save();
+
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.status(201).json({ categories, item: newItem });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to add item', message: err.message });
+  }
+});
+
+/* ── PUT /api/categories/:catId/items/:itemId ── */
+router.put('/categories/:catId/items/:itemId', async (req, res) => {
+  try {
+    const { catId, itemId } = req.params;
+    const { url, heading, description, image } = req.body;
+
+    const cat = await Category.findOne({ id: catId });
+    if (!cat) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    const item = cat.items.find(i => i.id === itemId);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    if (url !== undefined) item.url = url.trim();
+    if (heading !== undefined) item.heading = heading.trim();
+    if (description !== undefined) item.description = description.trim();
+    if (image !== undefined) item.image = image.trim();
+
+    await cat.save();
+
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories, item });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update item', message: err.message });
+  }
+});
+
+/* ── DELETE /api/categories/:catId/items/:itemId ── */
+router.delete('/categories/:catId/items/:itemId', async (req, res) => {
+  try {
+    const { catId, itemId } = req.params;
+
+    const cat = await Category.findOne({ id: catId });
+    if (!cat) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+
+    cat.items = cat.items.filter(i => i.id !== itemId);
+    await cat.save();
+
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete item', message: err.message });
+  }
+});
+
+export default router;
