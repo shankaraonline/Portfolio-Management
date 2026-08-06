@@ -18,7 +18,7 @@ let isConnected = false;
 app.use(async (req, res, next) => {
   if (!isConnected && mongoose.connection.readyState !== 1) {
     try {
-      await mongoose.connect(MONGODB_URI);
+      await mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 15000 });
       isConnected = true;
       console.log('✅ Serverless DB connected to MongoDB Atlas');
     } catch (err) {

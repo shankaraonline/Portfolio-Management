@@ -24,7 +24,7 @@ app.get('/health', (req, res) => {
 });
 
 // Database connection & Server start
-mongoose.connect(MONGODB_URI)
+mongoose.connect(MONGODB_URI, { family: 4, serverSelectionTimeoutMS: 15000 })
   .then(() => {
     console.log('✅ Connected to MongoDB successfully:', MONGODB_URI);
     app.listen(PORT, '0.0.0.0', () => {
