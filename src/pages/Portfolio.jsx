@@ -580,6 +580,7 @@ const CSS = `
     transform: scale(1.05);
     opacity: 0.9;
   }
+  .pf-menu-toggle { display: none; }
   .pf-logo-wrap { flex: 1; display: flex; align-items: center; }
   .pf-logo-img { height: 48px; width: auto; object-fit: contain; border-radius: 0; }
   .pf-logo-ph {
