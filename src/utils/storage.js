@@ -3,7 +3,7 @@ const KEY = 'shankara_portfolio_v2';
 const DEFAULTS = {
   categories: [],
   logoUrl: '',
-  portfolioTitle: 'Portfolio',
+  portfolioTitle: 'Shankara Online Portfolio',
 };
 
 export function getData() {
