@@ -27,14 +27,14 @@ app.get('/health', (req, res) => {
 mongoose.connect(MONGODB_URI)
   .then(() => {
     console.log('✅ Connected to MongoDB successfully:', MONGODB_URI);
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server running on http://0.0.0.0:${PORT} (accessible via network IP)`);
     });
   })
   .catch((err) => {
     console.error('❌ MongoDB Connection Error:', err.message);
     console.log('⚠️ Running server without DB connection for API health endpoints...');
-    app.listen(PORT, () => {
-      console.log(`🚀 Server listening on http://localhost:${PORT} (Database disconnected)`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server listening on http://0.0.0.0:${PORT} (Database disconnected)`);
     });
   });

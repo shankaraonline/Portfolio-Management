@@ -201,12 +201,21 @@ export function WebsiteIcon({ size = 18 }) {
   );
 }
 
+export function BehanceIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#1769ff" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
+      <path d="M22 7h-7v-2h7v2zm-11.708 3.791c.729-.464 1.208-1.2 1.208-2.146 0-1.896-1.583-2.645-3.666-2.645h-5.834v12h6.166c2.479 0 4.125-.979 4.125-3.271 0-1.771-1.041-2.771-2.001-3.938zm-5.292-2.791h2.583c.917 0 1.583.25 1.583 1.083 0 .875-.666 1.125-1.583 1.125h-2.583v-2.208zm2.833 7h-2.833v-2.5h2.833c1.041 0 1.75.292 1.75 1.25 0 .979-.709 1.25-1.75 1.25zm12.333-3.417h-5.166c.125 1.208 1.041 1.75 2.166 1.75.917 0 1.625-.333 1.958-.833h2.333c-.583 1.833-2.25 2.667-4.291 2.667-2.917 0-4.708-1.958-4.708-4.667 0-2.625 1.791-4.625 4.625-4.625 2.917 0 4.417 2.083 4.417 4.542 0 .417-.042.833-.083 1.166zm-4.791-1.833h2.875c-.166-.875-.791-1.375-1.458-1.375-.708 0-1.292.5-1.417 1.375z"/>
+    </svg>
+  );
+}
+
 /* ─── Tab config ──────────────────────────────────────────────────────── */
 
 const TABS = [
   { key: 'instagram', label: 'Instagram Reels', icon: <InstagramIcon size={18} />, accent: '#e1306c', type: 'instagram' },
   { key: 'youtube',   label: 'YouTube Videos',  icon: <YoutubeIcon size={20} />,   accent: '#ff0000', type: 'youtube' },
   { key: 'websites',  label: 'Websites',        icon: <WebsiteIcon size={18} />,  accent: '#00b4d8', type: 'website' },
+  { key: 'behance',   label: 'Behance',         icon: <BehanceIcon size={18} />,  accent: '#1769ff', isLink: true, url: 'https://www.behance.net/shankaraonline' },
 ];
 
 /* ─── Portfolio Page ──────────────────────────────────────────────────── */
@@ -225,6 +234,7 @@ export default function Portfolio() {
   const [selectedCatId, setSelectedCatId] = useState('all');
   const [activeReelId, setActiveReelId] = useState(null);
   const [stoppedIds, setStoppedIds] = useState([]);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Use a ref so activateReel always reads the latest activeReelId without stale closure
   const activeReelIdRef = useRef(null);
@@ -323,38 +333,119 @@ export default function Portfolio() {
       {/* ── Header ── */}
       <header className="pf-header">
         <div className="pf-header-inner">
-          {/* Logo */}
-          <div className="pf-logo-wrap">
-            <img
-              src={logoSrc}
-              alt="Logo"
-              className="pf-logo-img"
-              onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
-            />
-            <div className="pf-logo-ph" style={{ display: 'none' }}>S</div>
-          </div>
+          {/* Logo (clickable link to website) */}
+          <a
+            href="https://shankaraonline.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pf-logo-link"
+            title="Visit Shankara Online Website"
+          >
+            <div className="pf-logo-wrap">
+              <img
+                src={logoSrc}
+                alt="Logo"
+                className="pf-logo-img"
+                onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+              />
+              <div className="pf-logo-ph" style={{ display: 'none' }}>S</div>
+            </div>
+          </a>
 
           {/* Title */}
           <h1 className="pf-title">Portfolio</h1>
+
+          {/* Hamburger Menu Toggle (Mobile Only) */}
+          <button
+            className="pf-menu-toggle"
+            onClick={() => setMobileMenuOpen(prev => !prev)}
+            aria-label="Toggle navigation menu"
+            title="Menu"
+          >
+            {mobileMenuOpen ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"/>
+                <line x1="3" y1="12" x2="21" y2="12"/>
+                <line x1="3" y1="18" x2="21" y2="18"/>
+              </svg>
+            )}
+          </button>
         </div>
+
+        {/* Mobile Navigation Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="pf-mobile-dropdown">
+            {TABS.map(t => (
+              t.isLink ? (
+                <a
+                  key={t.key}
+                  href={t.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pf-mobile-tab"
+                  onClick={() => setMobileMenuOpen(false)}
+                  style={{ color: t.accent }}
+                >
+                  <span className="pf-tab-icon">{t.icon}</span>
+                  <span className="pf-tab-label">{t.label}</span>
+                  <span className="pf-link-arrow">↗</span>
+                </a>
+              ) : (
+                <button
+                  key={t.key}
+                  className={`pf-mobile-tab ${activeTab === t.key ? 'pf-mobile-tab--active' : ''}`}
+                  onClick={() => {
+                    handleTabClick(t.key);
+                    setMobileMenuOpen(false);
+                  }}
+                  style={activeTab === t.key ? { color: t.accent, borderColor: t.accent } : {}}
+                >
+                  <span className="pf-tab-icon">{t.icon}</span>
+                  <span className="pf-tab-label">{t.label}</span>
+                  {activeTab === t.key && <span className="pf-tab-check">✓</span>}
+                </button>
+              )
+            ))}
+          </div>
+        )}
       </header>
 
       {/* ── Tabs ── */}
       <nav className="pf-tabs">
         <div className="pf-tabs-inner">
           {TABS.map(t => (
-            <button
-              key={t.key}
-              className={`pf-tab ${activeTab === t.key ? 'pf-tab--active' : ''}`}
-              style={activeTab === t.key ? { color: t.accent, '--tab-accent': t.accent } : {}}
-              onClick={() => handleTabClick(t.key)}
-            >
-              <span className="pf-tab-icon">{t.icon}</span>
-              {t.label}
-              {activeTab === t.key && (
-                <span className="pf-tab-indicator" style={{ background: t.accent }} />
-              )}
-            </button>
+            t.isLink ? (
+              <a
+                key={t.key}
+                href={t.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pf-tab"
+                style={{ color: t.accent, '--tab-accent': t.accent, textDecoration: 'none' }}
+                title={`Visit ${t.label} Profile`}
+              >
+                <span className="pf-tab-icon">{t.icon}</span>
+                {t.label} ↗
+              </a>
+            ) : (
+              <button
+                key={t.key}
+                className={`pf-tab ${activeTab === t.key ? 'pf-tab--active' : ''}`}
+                style={activeTab === t.key ? { color: t.accent, '--tab-accent': t.accent } : {}}
+                onClick={() => handleTabClick(t.key)}
+              >
+                <span className="pf-tab-icon">{t.icon}</span>
+                {t.label}
+                {activeTab === t.key && (
+                  <span className="pf-tab-indicator" style={{ background: t.accent }} />
+                )}
+              </button>
+            )
           ))}
         </div>
       </nav>
@@ -430,7 +521,17 @@ export default function Portfolio() {
       </main>
 
       <footer className="pf-footer">
-        <span>© {new Date().getFullYear()} {data.portfolioTitle || 'Portfolio'} · Built with ♥</span>
+        <span>
+          © {new Date().getFullYear()} {data.portfolioTitle || 'Portfolio'} · Built with <span className="pf-heart">♥</span> by{' '}
+          <a
+            href="https://shankaraonline.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pf-footer-link"
+          >
+            ShankaraOnline
+          </a>
+        </span>
       </footer>
     </div>
   );
@@ -468,6 +569,16 @@ const CSS = `
     padding: 12px 40px;
     display: flex; align-items: center;
     position: relative;
+  }
+  .pf-logo-link {
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    transition: transform 0.2s ease, opacity 0.2s ease;
+  }
+  .pf-logo-link:hover {
+    transform: scale(1.05);
+    opacity: 0.9;
   }
   .pf-logo-wrap { flex: 1; display: flex; align-items: center; }
   .pf-logo-img { height: 48px; width: auto; object-fit: contain; border-radius: 0; }
@@ -559,7 +670,7 @@ const CSS = `
   }
 
   /* ── Main ── */
-  .pf-main { max-width: 1440px; margin: 0 auto; padding: 40px 40px 40px; }
+  .pf-main { max-width: 1440px; margin: 0 auto; padding: 20px 40px 40px; }
 
   /* ── Category ── */
   .pf-cat { margin-bottom: 72px; }
@@ -801,6 +912,21 @@ const CSS = `
     background: #fff;
     letter-spacing: 0.06em;
   }
+  .pf-heart {
+    color: #e53935;
+    display: inline-block;
+    margin: 0 2px;
+  }
+  .pf-footer-link {
+    color: #4d2c7b;
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .pf-footer-link:hover {
+    text-decoration: underline;
+    color: #3b1f5e;
+  }
 
   /* ── Responsive ── */
   @media (max-width: 1400px) {
@@ -812,21 +938,43 @@ const CSS = `
     .pf-grid--instagram { grid-template-columns: repeat(3, 1fr); }
     .pf-grid--youtube { grid-template-columns: repeat(3, 1fr); }
     .pf-grid--websites { grid-template-columns: repeat(3, 1fr); }
-    .pf-main { padding: 40px 28px 32px; }
+    .pf-main { padding: 20px 28px 32px; }
     .pf-header-inner { padding: 14px 28px; }
     .pf-tabs-inner { padding: 0 28px; }
   }
   @media (max-width: 768px) {
     .pf-title { font-size: 17px; }
-    .pf-tab { padding: 14px 18px; font-size: 13px; }
+    .pf-tabs { display: none; }
+    .pf-menu-toggle { display: flex; margin-left: auto; background: none; border: none; cursor: pointer; padding: 6px; }
+    .pf-mobile-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 120;
+      background: #ffffff;
+      padding: 14px 18px 8px;
+      border-bottom: 1px solid var(--border);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+      display: flex; flex-direction: column;
+    }
+    .pf-mobile-tab {
+      width: 100%; display: flex; align-items: center; gap: 12px;
+      padding: 14px 16px; border-radius: 12px;
+      font-size: 15px; font-weight: 600; text-align: left;
+      background: #f8f9fc; border: 1.5px solid transparent;
+      margin-bottom: 8px; font-family: inherit;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .pf-mobile-tab--active {
+      background: #ede9f6; font-weight: 700;
+    }
+    .pf-tab-label { flex: 1; font-size: 14px; }
+    .pf-tab-check { font-weight: 800; font-size: 15px; }
+    .pf-link-arrow { opacity: 0.7; font-size: 15px; }
     .pf-grid--websites { grid-template-columns: repeat(2, 1fr); }
     .pf-grid--instagram { grid-template-columns: repeat(2, 1fr); }
     .pf-grid--youtube { grid-template-columns: repeat(2, 1fr); }
     .pf-grid--videos { grid-template-columns: 1fr; }
     .pf-cat-name { font-size: 21px; }
-    .pf-main { padding: 32px 18px 24px; }
+    .pf-main { padding: 16px 18px 24px; }
     .pf-header-inner { padding: 12px 18px; }
-    .pf-tabs-inner { padding: 0 12px; justify-content: flex-start; overflow-x: auto; }
   }
   @media (max-width: 480px) {
     .pf-grid--websites { grid-template-columns: 1fr; }

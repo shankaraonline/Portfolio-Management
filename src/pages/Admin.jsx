@@ -6,7 +6,8 @@ import {
   deleteCategoryApi,
   addItemApi,
   updateItemApi,
-  deleteItemApi
+  deleteItemApi,
+  loginApi
 } from '../utils/api';
 import { InstagramIcon, YoutubeIcon, WebsiteIcon } from './Portfolio.jsx';
 
@@ -27,6 +28,18 @@ export default function Admin() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem('admin_token') ? true : false;
+  });
+  const [loginUser, setLoginUser] = useState(() => {
+    return localStorage.getItem('admin_username') || 'ShankaraSuperAdmin';
+  });
+  const [usernameInput, setUsernameInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
 
   const refresh = (newData) => setData({ ...newData });
 
@@ -148,6 +161,38 @@ export default function Admin() {
     reader.readAsDataURL(file);
   };
 
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!usernameInput.trim() || !passwordInput.trim()) {
+      setLoginError('Please enter both username and password.');
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const res = await loginApi(usernameInput, passwordInput);
+      if (res.success) {
+        localStorage.setItem('admin_token', res.token);
+        localStorage.setItem('admin_username', res.user.username);
+        setIsAuthenticated(true);
+        setLoginUser(res.user.username);
+        setPasswordInput('');
+      } else {
+        setLoginError(res.error || 'Invalid credentials');
+      }
+    } catch (err) {
+      setLoginError(err.message || 'Invalid username or password');
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_username');
+    setIsAuthenticated(false);
+  };
+
   const selectedCat = data.categories.find(c => c.id === selectedCatId);
   const activePlaceholder = TYPE_OPTIONS.find(t => t.value === form.type)?.ph || '';
   // Items filtered by the currently active type tab
@@ -155,15 +200,79 @@ export default function Admin() {
     ? selectedCat.items.filter(i => i.type === form.type)
     : [];
 
+  // ── Render Login Page if not authenticated ──
+  if (!isAuthenticated) {
+    const logoSrc = `${import.meta.env.BASE_URL}Admin-page-logo.png`;
+    return (
+      <div className="adm-login-page">
+        <style>{CSS}</style>
+        <div className="adm-login-card">
+          {/* Logo */}
+          <div className="adm-login-logo-wrap">
+            <img
+              src={logoSrc}
+              alt="Shankara Online Solutions"
+              className="adm-login-logo"
+              onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }}
+            />
+            <h2 className="adm-login-logo-fallback" style={{ display: 'none' }}>
+              Shankara Online Solutions
+            </h2>
+          </div>
+
+          {/* Role Pill Bar */}
+          <div className="adm-role-bar">
+            <button type="button" className="adm-role-btn adm-role-btn--active">Admin</button>
+          </div>
+
+          {/* Login Form */}
+          <form onSubmit={handleLogin} className="adm-login-form">
+            {loginError && <div className="adm-login-err">{loginError}</div>}
+
+            <div className="adm-login-field">
+              <label className="adm-login-label">Username</label>
+              <input
+                type="text"
+                className="adm-login-input"
+                placeholder="Username"
+                value={usernameInput}
+                onChange={e => setUsernameInput(e.target.value)}
+                autoFocus
+              />
+            </div>
+
+            <div className="adm-login-field">
+              <label className="adm-login-label">Password</label>
+              <input
+                type="password"
+                className="adm-login-input"
+                placeholder="••••••••••••"
+                value={passwordInput}
+                onChange={e => setPasswordInput(e.target.value)}
+              />
+            </div>
+
+            <button type="submit" className="adm-login-submit" disabled={loginLoading}>
+              {loginLoading ? 'Signing in…' : '➔] Sign In as Admin'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="adm">
       <style>{CSS}</style>
 
       {/* ── Sidebar ── */}
       <aside className="adm-sidebar">
-        {/* Top Link */}
+        {/* Top Link & Logout */}
         <div className="adm-sidebar-top">
           <a href="#" className="adm-view-btn">← View Portfolio</a>
+          <button className="adm-logout-btn" onClick={handleLogout} title="Log out of Admin">
+            Log Out
+          </button>
         </div>
 
         {/* Create Category */}
@@ -601,12 +710,17 @@ const CSS = `
   .adm-sidebar-top {
     padding: 16px;
     border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
   .adm-view-btn {
-    display: block; font-size: 13px; font-weight: 600; color: #4d2c7b;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #4d2c7b;
     padding: 10px 14px; border-radius: 8px;
     background: #f0ecf8; border: 1px solid rgba(77,44,123,0.15);
     text-align: center; transition: all 0.2s;
+    width: 100%;
   }
   .adm-view-btn:hover { background: #4d2c7b; color: #ffffff; }
 
@@ -906,6 +1020,158 @@ const CSS = `
     flex-shrink: 0; transition: background 0.15s;
   }
   .adm-img-clear-btn:hover { background: rgba(220,38,38,0.16); }
+
+  /* ── Login Page ── */
+  .adm-login-page {
+    min-height: 100vh;
+    background: #f1edfa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    font-family: 'Poppins', sans-serif;
+  }
+  .adm-login-card {
+    background: #ffffff;
+    width: 100%;
+    max-width: 440px;
+    border-radius: 24px;
+    padding: 38px 40px;
+    box-shadow: 0 16px 48px rgba(77, 44, 123, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .adm-login-logo-wrap {
+    margin-bottom: 28px;
+    text-align: center;
+  }
+  .adm-login-logo {
+    height: 52px;
+    width: auto;
+    object-fit: contain;
+  }
+  .adm-login-logo-fallback {
+    font-size: 22px;
+    font-weight: 700;
+    color: #4d2c7b;
+    margin: 0;
+  }
+  .adm-role-bar {
+    width: 100%;
+    background: #f1edfa;
+    border-radius: 12px;
+    padding: 4px;
+    display: flex;
+    margin-bottom: 28px;
+  }
+  .adm-role-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    cursor: default;
+    transition: all 0.2s ease;
+  }
+  .adm-role-btn--active {
+    background: #5a2d82;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(90, 45, 130, 0.25);
+  }
+  .adm-login-form {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  .adm-login-err {
+    background: #ffebee;
+    color: #d32f2f;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+    border: 1px solid rgba(211, 47, 47, 0.2);
+  }
+  .adm-login-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .adm-login-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #4a5568;
+  }
+  .adm-login-input {
+    width: 100%;
+    height: 48px;
+    background: #eef4ff;
+    border: 1.5px solid #dce6f9;
+    border-radius: 10px;
+    padding: 0 16px;
+    font-size: 14px;
+    font-family: inherit;
+    color: #1a1020;
+    outline: none;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  }
+  .adm-login-input:focus {
+    background: #ffffff;
+    border-color: #5a2d82;
+    box-shadow: 0 0 0 3px rgba(90, 45, 130, 0.12);
+  }
+  .adm-login-submit {
+    margin-top: 8px;
+    width: 100%;
+    height: 50px;
+    background: #5a2d82;
+    color: #ffffff;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    box-shadow: 0 6px 20px rgba(90, 45, 130, 0.25);
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+  }
+  .adm-login-submit:hover:not(:disabled) {
+    background: #4a236d;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(90, 45, 130, 0.35);
+  }
+  .adm-login-submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+  .adm-logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    font-weight: 600;
+    color: #dc2626;
+    background: rgba(220, 38, 38, 0.08);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    padding: 10px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+  }
+  .adm-logout-btn:hover {
+    background: #dc2626;
+    color: #ffffff;
+  }
 
   /* ── Responsive ── */
   @media (max-width: 768px) {

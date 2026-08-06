@@ -1,11 +1,72 @@
 import express from 'express';
 import Category from '../models/Category.js';
+import User from '../models/User.js';
 
 const router = express.Router();
 
 function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
+
+// Auto-seed default SuperAdmin user if not existing
+async function seedDefaultAdmin() {
+  try {
+    const existing = await User.findOne({ username: 'ShankaraSuperAdmin' });
+    if (!existing) {
+      const adminUser = new User({
+        username: 'ShankaraSuperAdmin',
+        password: 'ShankaraSuperAdmin513',
+        role: 'admin'
+      });
+      await adminUser.save();
+      console.log('👤 Default admin user (ShankaraSuperAdmin) seeded in MongoDB.');
+    }
+  } catch (err) {
+    console.warn('⚠️ Could not seed admin user:', err.message);
+  }
+}
+seedDefaultAdmin();
+
+/* ── POST /api/login ── */
+router.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Hardcoded fallback check for local/offline resilience
+    if (username.trim() === 'ShankaraSuperAdmin' && password.trim() === 'ShankaraSuperAdmin513') {
+      return res.json({
+        success: true,
+        user: { username: 'ShankaraSuperAdmin', role: 'admin' },
+        token: 'auth_token_' + uid()
+      });
+    }
+
+    // Check MongoDB database
+    const user = await User.findOne({ username: username.trim(), password: password.trim() });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    res.json({
+      success: true,
+      user: { username: user.username, role: user.role },
+      token: 'auth_token_' + uid()
+    });
+  } catch (err) {
+    // Fallback if DB error
+    if (req.body.username === 'ShankaraSuperAdmin' && req.body.password === 'ShankaraSuperAdmin513') {
+      return res.json({
+        success: true,
+        user: { username: 'ShankaraSuperAdmin', role: 'admin' },
+        token: 'auth_token_' + uid()
+      });
+    }
+    res.status(500).json({ error: 'Login server error', message: err.message });
+  }
+});
 
 /* ── GET /api/portfolio ── */
 router.get('/portfolio', async (req, res) => {

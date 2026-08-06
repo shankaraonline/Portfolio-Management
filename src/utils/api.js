@@ -2,6 +2,32 @@ import { getData as getLocalData, addCategory as addLocalCat, deleteCategory as 
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+/* ── Login Authentication ── */
+export async function loginApi(username, password) {
+  try {
+    const res = await fetch(`${API_BASE}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'Login failed');
+    }
+    return data;
+  } catch (err) {
+    // Offline fallback verification
+    if (username.trim() === 'ShankaraSuperAdmin' && password.trim() === 'ShankaraSuperAdmin513') {
+      return {
+        success: true,
+        user: { username: 'ShankaraSuperAdmin', role: 'admin' },
+        token: 'auth_token_offline'
+      };
+    }
+    throw new Error(err.message || 'Invalid username or password');
+  }
+}
+
 /* ── Fetch all portfolio data from server (falls back to localStorage) ── */
 export async function fetchPortfolioData() {
   try {
