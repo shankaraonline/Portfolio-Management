@@ -521,8 +521,11 @@ export default function Portfolio() {
       </main>
 
       <footer className="pf-footer">
-        <span>
-          © {new Date().getFullYear()} {data.portfolioTitle || 'Portfolio'} · Built with <span className="pf-heart">♥</span> by{' '}
+        <div className="pf-footer-title">
+          © {new Date().getFullYear()} WorkFrame
+        </div>
+        <div className="pf-footer-sub">
+          Built with <span className="pf-heart">♥</span> by{' '}
           <a
             href="https://shankaraonline.com/"
             target="_blank"
@@ -531,7 +534,7 @@ export default function Portfolio() {
           >
             ShankaraOnline
           </a>
-        </span>
+        </div>
       </footer>
     </div>
   );
@@ -907,11 +910,18 @@ const CSS = `
 
   /* ── Footer ── */
   .pf-footer {
-    text-align: center; padding: 32px 24px;
-    color: var(--muted); font-size: 12px;
+    text-align: center; padding: 24px 24px;
+    color: var(--muted); font-size: 13px;
     border-top: 1px solid var(--border);
     background: #fff;
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
+    display: flex; flex-direction: column; gap: 6px; align-items: center;
+  }
+  .pf-footer-title {
+    font-weight: 700; color: #1a1020; font-size: 14px;
+  }
+  .pf-footer-sub {
+    font-size: 12px; color: var(--muted);
   }
   .pf-heart {
     color: #e53935;
