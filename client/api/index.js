@@ -8,31 +8,31 @@ dotenv.config();
 /* ── Inline Mongoose Models (self-contained for Vercel serverless) ── */
 
 const itemSchema = new mongoose.Schema({
-  id:          { type: String, required: true },
-  type:        { type: String, required: true, enum: ['instagram', 'youtube', 'website'] },
-  url:         { type: String, required: true },
-  heading:     { type: String, default: '' },
+  id: { type: String, required: true },
+  type: { type: String, required: true, enum: ['instagram', 'youtube', 'website'] },
+  url: { type: String, required: true },
+  heading: { type: String, default: '' },
   description: { type: String, default: '' },
-  image:       { type: String, default: '' },
-  createdAt:   { type: Date, default: Date.now }
+  image: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const categorySchema = new mongoose.Schema({
-  id:        { type: String, required: true, unique: true },
-  name:      { type: String, required: true, trim: true },
-  items:     [itemSchema],
+  id: { type: String, required: true, unique: true },
+  name: { type: String, required: true, trim: true },
+  items: [itemSchema],
   createdAt: { type: Date, default: Date.now }
 });
 
 const userSchema = new mongoose.Schema({
   username: { type: String, required: true, unique: true },
   password: { type: String, required: true },
-  role:     { type: String, default: 'admin' }
+  role: { type: String, default: 'admin' }
 }, { timestamps: true });
 
 // Guard against model re-registration on hot reloads
 const Category = mongoose.models.Category || mongoose.model('Category', categorySchema);
-const User     = mongoose.models.User     || mongoose.model('User', userSchema);
+const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 /* ── DB Connection ── */
 
@@ -177,10 +177,10 @@ app.put('/api/categories/:catId/items/:itemId', async (req, res) => {
     const item = cat.items.find(i => i.id === req.params.itemId);
     if (!item) return res.status(404).json({ error: 'Item not found' });
 
-    if (url !== undefined)         item.url         = url.trim();
-    if (heading !== undefined)     item.heading     = heading.trim();
+    if (url !== undefined) item.url = url.trim();
+    if (heading !== undefined) item.heading = heading.trim();
     if (description !== undefined) item.description = description.trim();
-    if (image !== undefined)       item.image       = image.trim();
+    if (image !== undefined) item.image = image.trim();
 
     await cat.save();
     const categories = await Category.find({}).sort({ createdAt: 1 });
