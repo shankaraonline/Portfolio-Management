@@ -10,6 +10,12 @@ const getApiBase = () => {
 
 const API_BASE = getApiBase();
 
+/* ── Auth Header Helper ── */
+function getAuthHeader() {
+  const token = localStorage.getItem('admin_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 /* ── Login Authentication ── */
 export async function loginApi(username, password) {
   try {
@@ -54,7 +60,7 @@ export async function addCategoryApi(name) {
   try {
     const res = await fetch(`${API_BASE}/categories`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
       body: JSON.stringify({ name }),
     });
     if (!res.ok) throw new Error('Failed to create category');
@@ -71,6 +77,7 @@ export async function deleteCategoryApi(id) {
   try {
     const res = await fetch(`${API_BASE}/categories/${id}`, {
       method: 'DELETE',
+      headers: { ...getAuthHeader() },
     });
     if (!res.ok) throw new Error('Failed to delete category');
     const data = await res.json();
@@ -86,7 +93,7 @@ export async function addItemApi(catId, itemData) {
   try {
     const res = await fetch(`${API_BASE}/categories/${catId}/items`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
       body: JSON.stringify(itemData),
     });
     if (!res.ok) throw new Error('Failed to add item');
@@ -103,7 +110,7 @@ export async function updateItemApi(catId, itemId, updatedFields) {
   try {
     const res = await fetch(`${API_BASE}/categories/${catId}/items/${itemId}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
       body: JSON.stringify(updatedFields),
     });
     if (!res.ok) throw new Error('Failed to update item');
@@ -120,6 +127,7 @@ export async function deleteItemApi(catId, itemId) {
   try {
     const res = await fetch(`${API_BASE}/categories/${catId}/items/${itemId}`, {
       method: 'DELETE',
+      headers: { ...getAuthHeader() },
     });
     if (!res.ok) throw new Error('Failed to delete item');
     const data = await res.json();

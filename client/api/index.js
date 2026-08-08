@@ -2,8 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'shankara_fallback_secret_change_in_production';
 
 /* ── Inline Mongoose Models (self-contained for Vercel serverless) ── */
 
@@ -87,6 +90,20 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
+/* ── Auth Middleware ── */
+function verifyToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+  if (!token) return res.status(401).json({ error: 'Access denied. No token provided.' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token. Please log in again.' });
+  }
+}
+
 /* ── POST /api/login ── */
 app.post('/api/login', async (req, res) => {
   try {
@@ -97,16 +114,19 @@ app.post('/api/login', async (req, res) => {
 
     // Hardcoded fallback for resilience
     if (username.trim() === 'ShankaraSuperAdmin' && password.trim() === 'ShankaraSuperAdmin513') {
-      return res.json({ success: true, user: { username: 'ShankaraSuperAdmin', role: 'admin' }, token: 'auth_token_' + uid() });
+      const token = jwt.sign({ username: 'ShankaraSuperAdmin', role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ success: true, user: { username: 'ShankaraSuperAdmin', role: 'admin' }, token });
     }
 
     const user = await User.findOne({ username: username.trim(), password: password.trim() });
     if (!user) return res.status(401).json({ error: 'Invalid username or password' });
 
-    res.json({ success: true, user: { username: user.username, role: user.role }, token: 'auth_token_' + uid() });
+    const token = jwt.sign({ username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ success: true, user: { username: user.username, role: user.role }, token });
   } catch (err) {
     if (req.body.username === 'ShankaraSuperAdmin' && req.body.password === 'ShankaraSuperAdmin513') {
-      return res.json({ success: true, user: { username: 'ShankaraSuperAdmin', role: 'admin' }, token: 'auth_token_' + uid() });
+      const token = jwt.sign({ username: 'ShankaraSuperAdmin', role: 'admin' }, JWT_SECRET, { expiresIn: '7d' });
+      return res.json({ success: true, user: { username: 'ShankaraSuperAdmin', role: 'admin' }, token });
     }
     res.status(500).json({ error: 'Login server error', message: err.message });
   }
@@ -124,7 +144,7 @@ app.get('/api/portfolio', async (_req, res) => {
 });
 
 /* ── POST /api/categories ── */
-app.post('/api/categories', async (req, res) => {
+app.post('/api/categories', verifyToken, async (req, res) => {
   try {
     const { name } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
@@ -138,7 +158,7 @@ app.post('/api/categories', async (req, res) => {
 });
 
 /* ── DELETE /api/categories/:id ── */
-app.delete('/api/categories/:id', async (req, res) => {
+app.delete('/api/categories/:id', verifyToken, async (req, res) => {
   try {
     await Category.deleteOne({ id: req.params.id });
     const categories = await Category.find({}).sort({ createdAt: 1 });
@@ -149,7 +169,7 @@ app.delete('/api/categories/:id', async (req, res) => {
 });
 
 /* ── POST /api/categories/:catId/items ── */
-app.post('/api/categories/:catId/items', async (req, res) => {
+app.post('/api/categories/:catId/items', verifyToken, async (req, res) => {
   try {
     const { type, url, heading, description, image } = req.body;
     if (!url || !url.trim()) return res.status(400).json({ error: 'URL is required' });
@@ -168,7 +188,7 @@ app.post('/api/categories/:catId/items', async (req, res) => {
 });
 
 /* ── PUT /api/categories/:catId/items/:itemId ── */
-app.put('/api/categories/:catId/items/:itemId', async (req, res) => {
+app.put('/api/categories/:catId/items/:itemId', verifyToken, async (req, res) => {
   try {
     const { url, heading, description, image } = req.body;
     const cat = await Category.findOne({ id: req.params.catId });
@@ -191,7 +211,7 @@ app.put('/api/categories/:catId/items/:itemId', async (req, res) => {
 });
 
 /* ── DELETE /api/categories/:catId/items/:itemId ── */
-app.delete('/api/categories/:catId/items/:itemId', async (req, res) => {
+app.delete('/api/categories/:catId/items/:itemId', verifyToken, async (req, res) => {
   try {
     const cat = await Category.findOne({ id: req.params.catId });
     if (!cat) return res.status(404).json({ error: 'Category not found' });
