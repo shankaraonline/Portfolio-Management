@@ -36,7 +36,7 @@ const User = mongoose.models.User || mongoose.model('User', userSchema);
 
 /* ── DB Connection ── */
 
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = process.env.MONGODB_URI; // Set this in Vercel → Settings → Environment Variables
 
 let isConnected = false;
 

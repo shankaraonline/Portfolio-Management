@@ -1,4 +1,4 @@
-﻿# Shankara Online Portfolio
+# Shankara Online Portfolio
 
 A full-stack portfolio web application for **ShankaraOnline / WorkFrame** that showcases Instagram Reels, YouTube Videos, and client websites — with a secure admin panel to manage all content dynamically.
 
@@ -147,13 +147,9 @@ Frontend runs at: `http://localhost:5173`
 
 Navigate to `http://localhost:5173/#admin` to open the Admin panel.
 
-**Default credentials:**
-```
-Username: ShankaraSuperAdmin
-Password: ShankaraSuperAdmin513
-```
+**Default credentials** are configured via environment variables or set during initial setup.
 
-> ⚠️ Change these credentials before going to production.
+> ⚠️ Never share or commit your admin credentials publicly. Keep them in `.env` files only.
 
 ---
 
