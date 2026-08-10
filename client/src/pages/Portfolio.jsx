@@ -41,7 +41,6 @@ function YoutubeCard({ item }) {
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen
           className="yt-iframe"
-          loading="lazy"
         />
       </div>
       {(item.heading || item.description) && (
@@ -90,7 +89,6 @@ function InstagramCard({ item, isStopped, onActivate }) {
           allowTransparency="true"
           allow="encrypted-media; autoplay"
           className="ig-iframe"
-          loading="lazy"
         />
         {/* Only stopped reels show a replay overlay */}
         {isStopped && (
@@ -222,6 +220,7 @@ const TABS = [
 
 export default function Portfolio() {
   const [data, setData] = useState(getData);
+  const [isLoading, setIsLoading] = useState(true);
 
   const getTabFromHash = () => {
     const hash = window.location.hash.replace('#', '').toLowerCase();
@@ -262,11 +261,16 @@ export default function Portfolio() {
   }, []);
 
   useEffect(() => {
-    const loadData = async () => {
-      const res = await fetchPortfolioData();
-      setData(res);
+    const loadData = async (showLoader = false) => {
+      if (showLoader) setIsLoading(true);
+      try {
+        const res = await fetchPortfolioData();
+        setData(res);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    loadData();
+    loadData(true);
 
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
@@ -280,7 +284,7 @@ export default function Portfolio() {
         setActiveTab(prev => (prev === 'youtube' || prev === 'instagram' ? prev : 'instagram'));
       }
     };
-    const onFocus = () => loadData();
+    const onFocus = () => loadData(false);
 
     window.addEventListener('hashchange', onHashChange);
     window.addEventListener('focus', onFocus);
@@ -325,6 +329,18 @@ export default function Portfolio() {
 
   const videoItems = displayedCats.flatMap(cat => cat.items);
 
+
+  if (isLoading) {
+    return (
+      <div className="pf">
+        <style>{CSS}</style>
+        <div className="pf-loading-screen">
+          <div className="pf-spinner" />
+          <p className="pf-loading-text">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pf">
@@ -525,7 +541,7 @@ export default function Portfolio() {
           © {new Date().getFullYear()} WorkFrame
         </div>
         <div className="pf-footer-sub">
-          Built with <span className="pf-heart">♥</span> by{' '}
+          by{' '}
           <a
             href="https://shankaraonline.com/"
             target="_blank"
@@ -560,6 +576,23 @@ const CSS = `
   }
   .pf * { box-sizing: border-box; font-family: 'Poppins', sans-serif; }
   .pf a { text-decoration: none; color: inherit; }
+
+  /* ── Loading Screen ── */
+  .pf-loading-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 80vh; gap: 16px;
+  }
+  .pf-spinner {
+    width: 44px; height: 44px;
+    border: 4px solid rgba(77,44,123,0.15);
+    border-top-color: #4d2c7b;
+    border-radius: 50%;
+    animation: pf-spin 0.8s linear infinite;
+  }
+  @keyframes pf-spin { to { transform: rotate(360deg); } }
+  .pf-loading-text {
+    color: #4d2c7b; font-size: 14px; font-weight: 500; margin: 0;
+  }
 
   /* ── Header ── */
   .pf-header {
@@ -851,7 +884,7 @@ const CSS = `
   /* Image box */
   .site-img-wrap {
     width: 100%;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 4 / 3;
     overflow: hidden;
     background: #f0ecf8;
     flex-shrink: 0;
