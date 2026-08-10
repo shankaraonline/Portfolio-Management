@@ -261,16 +261,29 @@ export default function Portfolio() {
   }, []);
 
   useEffect(() => {
+    let retryTimer = null;
+
     const loadData = async (showLoader = false) => {
       if (showLoader) setIsLoading(true);
       try {
         const res = await fetchPortfolioData();
         setData(res);
+        return res;
       } finally {
         setIsLoading(false);
       }
     };
-    loadData(true);
+
+    // Initial load — may get localStorage fallback if server is cold-starting
+    loadData(true).then((res) => {
+      // If the result looks like it came from localStorage (very few items),
+      // schedule a silent retry after 6 s to catch the server once it warms up.
+      const totalItems = (res?.categories || []).reduce((n, c) => n + (c.items?.length || 0), 0);
+      const fromLocalStorage = totalItems <= 2; // heuristic: only test/seed data
+      if (fromLocalStorage) {
+        retryTimer = setTimeout(() => loadData(false), 6000);
+      }
+    });
 
     const onHashChange = () => {
       const hash = window.location.hash.replace('#', '').toLowerCase();
@@ -291,6 +304,7 @@ export default function Portfolio() {
     return () => {
       window.removeEventListener('hashchange', onHashChange);
       window.removeEventListener('focus', onFocus);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, []);
 

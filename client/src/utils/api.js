@@ -45,7 +45,8 @@ export async function loginApi(username, password) {
 /* ── Fetch all portfolio data from server (falls back to localStorage) ── */
 export async function fetchPortfolioData() {
   try {
-    const res = await fetch(`${API_BASE}/portfolio`, { signal: AbortSignal.timeout(3000) });
+    // 10 s timeout — gives cold-starting servers (Render/Vercel free tier) time to wake up
+    const res = await fetch(`${API_BASE}/portfolio`, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error('API server returned error status');
     const data = await res.json();
     return { ...getLocalData(), categories: data.categories || [] };
