@@ -1,6 +1,7 @@
 import express from 'express';
 import Category from '../models/Category.js';
 import User from '../models/User.js';
+import Settings from '../models/Settings.js';
 
 const router = express.Router();
 
@@ -72,7 +73,11 @@ router.post('/login', async (req, res) => {
 router.get('/portfolio', async (req, res) => {
   try {
     const categories = await Category.find({}).sort({ createdAt: 1 });
-    res.json({ categories });
+    const orderSetting = await Settings.findOne({ key: 'websiteOrder' });
+    res.json({
+      categories,
+      settings: { websiteOrder: orderSetting?.value || [] }
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch portfolio data', message: err.message });
   }
@@ -191,6 +196,59 @@ router.delete('/categories/:catId/items/:itemId', async (req, res) => {
     res.json({ categories });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete item', message: err.message });
+  }
+});
+
+/* ── PUT /api/categories/:catId/reorder ── */
+// Reorders items of a specific type within a category.
+// Body: { type: 'instagram'|'youtube'|'website', itemIds: [id1, id2, ...] }
+router.put('/categories/:catId/reorder', async (req, res) => {
+  try {
+    const { catId } = req.params;
+    const { type, itemIds } = req.body;
+    if (!type || !Array.isArray(itemIds)) {
+      return res.status(400).json({ error: 'type and itemIds array are required' });
+    }
+    const cat = await Category.findOne({ id: catId });
+    if (!cat) return res.status(404).json({ error: 'Category not found' });
+
+    // Build a lookup for the new order of the target type
+    const typeMap = {};
+    cat.items.filter(i => i.type === type).forEach(i => { typeMap[i.id] = i; });
+    const typeItemsOrdered = itemIds.map(id => typeMap[id]).filter(Boolean);
+
+    // Replace same-type items in-place with their new order
+    let typeIdx = 0;
+    cat.items = cat.items.map(item =>
+      item.type === type ? (typeItemsOrdered[typeIdx++] || item) : item
+    );
+    cat.markModified('items');
+    await cat.save();
+
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reorder items', message: err.message });
+  }
+});
+
+/* ── PUT /api/settings/website-order ── */
+// Saves the global display order for all website items.
+// Body: { itemIds: [id1, id2, ...] }
+router.put('/settings/website-order', async (req, res) => {
+  try {
+    const { itemIds } = req.body;
+    if (!Array.isArray(itemIds)) {
+      return res.status(400).json({ error: 'itemIds array is required' });
+    }
+    await Settings.findOneAndUpdate(
+      { key: 'websiteOrder' },
+      { value: itemIds },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, websiteOrder: itemIds });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update website order', message: err.message });
   }
 });
 

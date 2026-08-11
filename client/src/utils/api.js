@@ -49,7 +49,11 @@ export async function fetchPortfolioData() {
     const res = await fetch(`${API_BASE}/portfolio`, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error('API server returned error status');
     const data = await res.json();
-    return { ...getLocalData(), categories: data.categories || [] };
+    return {
+      ...getLocalData(),
+      categories: data.categories || [],
+      websiteOrder: data.settings?.websiteOrder || []
+    };
   } catch (err) {
     console.warn('⚠️ Server unreachable, using local storage fallback:', err.message);
     return getLocalData();
@@ -136,5 +140,38 @@ export async function deleteItemApi(catId, itemId) {
   } catch (err) {
     console.warn('⚠️ Server error, deleting item from local storage:', err.message);
     return deleteLocalItem(catId, itemId);
+  }
+}
+
+/* ── Reorder Items in a Category (by type) ── */
+export async function reorderCategoryItemsApi(catId, type, itemIds) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${catId}/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ type, itemIds }),
+    });
+    if (!res.ok) throw new Error('Failed to reorder items');
+    const data = await res.json();
+    return data.categories || null;
+  } catch (err) {
+    console.warn('⚠️ Server error on reorder:', err.message);
+    return null;
+  }
+}
+
+/* ── Update Global Website Display Order ── */
+export async function updateWebsiteOrderApi(itemIds) {
+  try {
+    const res = await fetch(`${API_BASE}/settings/website-order`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ itemIds }),
+    });
+    if (!res.ok) throw new Error('Failed to update website order');
+    return true;
+  } catch (err) {
+    console.warn('⚠️ Server error on website order update:', err.message);
+    return false;
   }
 }
