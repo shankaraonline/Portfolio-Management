@@ -562,7 +562,7 @@ export default function Portfolio() {
             rel="noopener noreferrer"
             className="pf-footer-link"
           >
-            ShankaraOnline
+            Shankara Online Solutions
           </a>
         </div>
       </footer>
