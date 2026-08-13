@@ -36,6 +36,17 @@ export function deleteCategory(id) {
   return save(d);
 }
 
+export function reorderCategories(categoryIds) {
+  const d = getData();
+  const catMap = new Map(d.categories.map(c => [c.id, c]));
+  const reordered = categoryIds.map(id => catMap.get(id)).filter(Boolean);
+  d.categories.forEach(c => {
+    if (!categoryIds.includes(c.id)) reordered.push(c);
+  });
+  d.categories = reordered;
+  return save(d);
+}
+
 export function addItem(catId, item) {
   const d = getData();
   const cat = d.categories.find(c => c.id === catId);

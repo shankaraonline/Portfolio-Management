@@ -1,4 +1,5 @@
-import { getData as getLocalData, addCategory as addLocalCat, deleteCategory as deleteLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
+import { getData as getLocalData, addCategory as addLocalCat, deleteCategory as deleteLocalCat, reorderCategories as reorderLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
+
 
 const getApiBase = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
@@ -90,6 +91,23 @@ export async function deleteCategoryApi(id) {
   } catch (err) {
     console.warn('⚠️ Server error, updating local storage:', err.message);
     return deleteLocalCat(id);
+  }
+}
+
+/* ── Reorder Categories ── */
+export async function reorderCategoriesApi(categoryIds) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ categoryIds }),
+    });
+    if (!res.ok) throw new Error('Failed to reorder categories');
+    const data = await res.json();
+    return { ...getLocalData(), categories: data.categories };
+  } catch (err) {
+    console.warn('⚠️ Server error, reordering in local storage:', err.message);
+    return reorderLocalCat(categoryIds);
   }
 }
 

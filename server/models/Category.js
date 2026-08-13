@@ -14,7 +14,9 @@ const categorySchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true, trim: true },
   items: [itemSchema],
+  order: { type: Number, default: 0 },
   createdAt: { type: Date, default: Date.now }
 });
 
 export default mongoose.model('Category', categorySchema);
+

@@ -72,7 +72,7 @@ router.post('/login', async (req, res) => {
 /* ── GET /api/portfolio ── */
 router.get('/portfolio', async (req, res) => {
   try {
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     const orderSetting = await Settings.findOne({ key: 'websiteOrder' });
     res.json({
       categories,
@@ -90,16 +90,43 @@ router.post('/categories', async (req, res) => {
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Category name is required' });
     }
+    const count = await Category.countDocuments();
     const newCat = new Category({
       id: uid(),
       name: name.trim(),
-      items: []
+      items: [],
+      order: count
     });
     await newCat.save();
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.status(201).json({ categories, category: newCat });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create category', message: err.message });
+  }
+});
+
+/* ── PUT /api/categories/reorder ── */
+// Reorders all categories globally.
+// Body: { categoryIds: [catId1, catId2, ...] }
+router.put('/categories/reorder', async (req, res) => {
+  try {
+    const { categoryIds } = req.body;
+    if (!Array.isArray(categoryIds)) {
+      return res.status(400).json({ error: 'categoryIds array is required' });
+    }
+    const bulkOps = categoryIds.map((id, index) => ({
+      updateOne: {
+        filter: { id },
+        update: { $set: { order: index } }
+      }
+    }));
+    if (bulkOps.length > 0) {
+      await Category.bulkWrite(bulkOps);
+    }
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
+    res.json({ categories });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to reorder categories', message: err.message });
   }
 });
 
@@ -108,7 +135,7 @@ router.delete('/categories/:id', async (req, res) => {
   try {
     const { id } = req.params;
     await Category.deleteOne({ id });
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.json({ categories });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete category', message: err.message });
@@ -142,7 +169,7 @@ router.post('/categories/:catId/items', async (req, res) => {
     cat.items.push(newItem);
     await cat.save();
 
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.status(201).json({ categories, item: newItem });
   } catch (err) {
     res.status(500).json({ error: 'Failed to add item', message: err.message });
@@ -172,7 +199,7 @@ router.put('/categories/:catId/items/:itemId', async (req, res) => {
 
     await cat.save();
 
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.json({ categories, item });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update item', message: err.message });
@@ -192,7 +219,7 @@ router.delete('/categories/:catId/items/:itemId', async (req, res) => {
     cat.items = cat.items.filter(i => i.id !== itemId);
     await cat.save();
 
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.json({ categories });
   } catch (err) {
     res.status(500).json({ error: 'Failed to delete item', message: err.message });
@@ -225,7 +252,7 @@ router.put('/categories/:catId/reorder', async (req, res) => {
     cat.markModified('items');
     await cat.save();
 
-    const categories = await Category.find({}).sort({ createdAt: 1 });
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
     res.json({ categories });
   } catch (err) {
     res.status(500).json({ error: 'Failed to reorder items', message: err.message });

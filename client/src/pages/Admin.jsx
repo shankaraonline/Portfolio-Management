@@ -4,6 +4,7 @@ import {
   fetchPortfolioData,
   addCategoryApi,
   deleteCategoryApi,
+  reorderCategoriesApi,
   addItemApi,
   updateItemApi,
   deleteItemApi,
@@ -24,7 +25,7 @@ const EMPTY_FORM = { type: 'instagram', url: '', heading: '', description: '', i
 
 const ORDER_TABS = [
   { key: 'instagram', label: 'Instagram Reels', icon: <InstagramIcon size={16} />, color: '#e1306c' },
-  { key: 'youtube',   label: 'YouTube Videos',  icon: <YoutubeIcon size={18} />,   color: '#ff0000' },
+  { key: 'youtube',   label: 'YouTube Videos',  icon: <YoutubeIcon size={20} />,   color: '#ff0000' },
   { key: 'website',   label: 'Websites',         icon: <WebsiteIcon size={16} />,   color: '#00b4d8' },
 ];
 
@@ -35,16 +36,21 @@ export default function Admin() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
 
   // Order manager state (shown when no category is selected)
   const [orderTab, setOrderTab] = useState('instagram');
   const [orderCatId, setOrderCatId] = useState(null);
   const [websiteOrder, setWebsiteOrder] = useState([]);
 
-  // Drag state
+  // Drag state for items
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  // Drag state for categories
+  const [dragCatId, setDragCatId] = useState(null);
+  const [dragOverCatId, setDragOverCatId] = useState(null);
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(() =>
@@ -98,8 +104,17 @@ export default function Admin() {
     setCatInput('');
   };
 
-  const handleDeleteCat = async (e, id) => {
+  const requestDeleteCat = (e, cat) => {
     e.stopPropagation();
+    setConfirmDelete({
+      type: 'category',
+      id: cat.id,
+      name: cat.name,
+      count: cat.items.length
+    });
+  };
+
+  const handleDeleteCat = async (id) => {
     const newData = await deleteCategoryApi(id);
     refresh(newData);
     if (selectedCatId === id) setSelectedCatId(null);
@@ -114,7 +129,6 @@ export default function Admin() {
     const itemData = {
       type: form.type,
       url: form.url.trim(),
-      // heading and description now saved for ALL types
       heading: form.heading.trim(),
       description: form.description.trim(),
       image: form.type === 'website' ? form.image.trim() : '',
@@ -127,11 +141,31 @@ export default function Admin() {
     setTimeout(() => setAddSuccess(false), 2000);
   };
 
+  const requestDeleteItem = (catId, item) => {
+    setConfirmDelete({
+      type: 'item',
+      catId,
+      itemId: item.id,
+      name: item.heading || item.url,
+      itemType: item.type
+    });
+  };
+
   const handleDeleteItem = async (catId, itemId) => {
     if (editingItemId === itemId) setEditingItemId(null);
     const newData = await deleteItemApi(catId, itemId);
     refresh(newData);
     setWebsiteOrder(prev => prev.filter(id => id !== itemId));
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!confirmDelete) return;
+    if (confirmDelete.type === 'category') {
+      await handleDeleteCat(confirmDelete.id);
+    } else if (confirmDelete.type === 'item') {
+      await handleDeleteItem(confirmDelete.catId, confirmDelete.itemId);
+    }
+    setConfirmDelete(null);
   };
 
   /* ── Item edit actions ── */
@@ -182,8 +216,46 @@ export default function Admin() {
     reader.readAsDataURL(file);
   };
 
+  /* ── Drag handlers: categories ── */
+  const handleCategoryDragStart = (e, catId) => {
+    setDragCatId(catId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleCategoryDragOver = (e, catId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (catId !== dragOverCatId) setDragOverCatId(catId);
+  };
+
+  const handleCategoryDrop = async (e, targetCatId) => {
+    e.preventDefault();
+    setDragOverCatId(null);
+    if (!dragCatId || dragCatId === targetCatId) { setDragCatId(null); return; }
+
+    const oldIdx = data.categories.findIndex(c => c.id === dragCatId);
+    const newIdx = data.categories.findIndex(c => c.id === targetCatId);
+    if (oldIdx === -1 || newIdx === -1) { setDragCatId(null); return; }
+
+    const reordered = [...data.categories];
+    const [moved] = reordered.splice(oldIdx, 1);
+    reordered.splice(newIdx, 0, moved);
+    setDragCatId(null);
+
+    // Optimistic update
+    setData(prev => ({ ...prev, categories: reordered }));
+
+    setSavingOrder(true);
+    try {
+      await reorderCategoriesApi(reordered.map(c => c.id));
+    } finally {
+      setSavingOrder(false);
+    }
+  };
+
   /* ── Drag handlers: per-category items (Instagram / YouTube) ── */
   const handleCatDragStart = (e, itemId) => {
+
     setDragId(itemId);
     e.dataTransfer.effectAllowed = 'move';
   };
@@ -431,16 +503,22 @@ export default function Admin() {
             {data.categories.map(cat => (
               <div
                 key={cat.id}
-                className={`adm-cat-row ${selectedCatId === cat.id ? 'adm-cat-row--active' : ''}`}
+                className={`adm-cat-row ${selectedCatId === cat.id ? 'adm-cat-row--active' : ''} ${dragOverCatId === cat.id ? 'adm-cat-row--drag-over' : ''} ${dragCatId === cat.id ? 'adm-cat-row--dragging' : ''}`}
                 onClick={() => setSelectedCatId(prev => prev === cat.id ? null : cat.id)}
+                draggable
+                onDragStart={(e) => handleCategoryDragStart(e, cat.id)}
+                onDragOver={(e) => handleCategoryDragOver(e, cat.id)}
+                onDrop={(e) => handleCategoryDrop(e, cat.id)}
+                onDragEnd={() => { setDragCatId(null); setDragOverCatId(null); }}
               >
+                <div className="adm-drag-handle adm-drag-handle--cat" title="Drag to reorder category">⠿</div>
                 <div className="adm-cat-info">
                   <span className="adm-cat-name">{cat.name}</span>
                   <span className="adm-cat-badge">{cat.items.length} items</span>
                 </div>
                 <button
                   className="adm-cat-del"
-                  onClick={(e) => handleDeleteCat(e, cat.id)}
+                  onClick={(e) => requestDeleteCat(e, cat)}
                   title="Delete category"
                 >
                   Delete
@@ -448,6 +526,7 @@ export default function Admin() {
               </div>
             ))}
           </div>
+
         </div>
       </aside>
 
@@ -460,7 +539,7 @@ export default function Admin() {
             <div className="adm-order-header">
               <h2 className="adm-main-title">Display Order</h2>
               <p className="adm-main-sub">
-                Select a type, pick a category, then drag ⠿ to set the display order
+                Select a type, drag ⠿ categories or items to set their display order
                 {savingOrder && <span className="adm-saving"> · Saving…</span>}
               </p>
             </div>
@@ -521,24 +600,31 @@ export default function Admin() {
               <div className="adm-order-split">
                 {/* Left: category list for this type */}
                 <div className="adm-order-cats-panel">
-                  <p className="adm-order-cats-label">Categories</p>
+                  <p className="adm-order-cats-label">Categories (Drag ⠿ to reorder)</p>
                   {orderCategoriesForTab.length === 0 ? (
                     <p className="adm-order-empty-hint">
                       No {orderTab === 'instagram' ? 'Instagram Reels' : 'YouTube Videos'} added yet.
                     </p>
                   ) : (
                     orderCategoriesForTab.map(cat => (
-                      <button
+                      <div
                         key={cat.id}
-                        className={`adm-order-cat-chip ${orderCatId === cat.id ? 'adm-order-cat-chip--active' : ''}`}
+                        className={`adm-order-cat-chip ${orderCatId === cat.id ? 'adm-order-cat-chip--active' : ''} ${dragOverCatId === cat.id ? 'adm-order-cat-chip--drag-over' : ''} ${dragCatId === cat.id ? 'adm-order-cat-chip--dragging' : ''}`}
                         onClick={() => setOrderCatId(prev => prev === cat.id ? null : cat.id)}
+                        draggable
+                        onDragStart={(e) => handleCategoryDragStart(e, cat.id)}
+                        onDragOver={(e) => handleCategoryDragOver(e, cat.id)}
+                        onDrop={(e) => handleCategoryDrop(e, cat.id)}
+                        onDragEnd={() => { setDragCatId(null); setDragOverCatId(null); }}
                       >
+                        <div className="adm-drag-handle adm-drag-handle--cat" title="Drag to reorder category">⠿</div>
                         <span className="adm-order-cat-name">{cat.name}</span>
                         <span className="adm-order-cat-count">{cat.items.length}</span>
-                      </button>
+                      </div>
                     ))
                   )}
                 </div>
+
 
                 {/* Right: drag list */}
                 <div className="adm-order-list-panel">
@@ -897,7 +983,7 @@ export default function Admin() {
                           >Edit</button>
                           <button
                             className="adm-item-delete"
-                            onClick={() => handleDeleteItem(selectedCat.id, item.id)}
+                            onClick={() => requestDeleteItem(selectedCat.id, item)}
                             title="Delete item"
                           >Delete</button>
                         </div>
@@ -910,6 +996,52 @@ export default function Admin() {
           </>
         )}
       </main>
+
+      {/* ── 2-Step Confirmation Modal ── */}
+      {confirmDelete && (
+        <div className="adm-modal-overlay" onClick={() => setConfirmDelete(null)}>
+          <div className="adm-modal-card" onClick={e => e.stopPropagation()}>
+            <div className="adm-modal-icon">⚠️</div>
+            <h3 className="adm-modal-title">
+              {confirmDelete.type === 'category' ? 'Delete Category?' : 'Delete Item?'}
+            </h3>
+            <div className="adm-modal-msg">
+              {confirmDelete.type === 'category' ? (
+                <>
+                  Are you sure you want to delete category <strong>"{confirmDelete.name}"</strong>?
+                  {confirmDelete.count > 0 && (
+                    <span className="adm-modal-warn">
+                      <br />This will also delete all {confirmDelete.count} item{confirmDelete.count > 1 ? 's' : ''} inside it.
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  Are you sure you want to delete this {confirmDelete.itemType || 'item'}?
+                  <br /><strong>"{confirmDelete.name}"</strong>
+                </>
+              )}
+            </div>
+            <div className="adm-modal-actions">
+              <button
+                type="button"
+                className="adm-modal-btn adm-modal-btn--cancel"
+                onClick={() => setConfirmDelete(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="adm-modal-btn adm-modal-btn--danger"
+                onClick={handleConfirmDelete}
+                autoFocus
+              >
+                Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1191,6 +1323,24 @@ const CSS = `
     display: flex; align-items: center; line-height: 1; margin-top: 2px;
   }
   .adm-drag-handle:active { cursor: grabbing; }
+  .adm-drag-handle--cat {
+    margin-top: 0; margin-right: 4px; font-size: 16px; opacity: 0.6; transition: opacity 0.15s;
+  }
+  .adm-cat-row:hover .adm-drag-handle--cat,
+  .adm-order-cat-chip:hover .adm-drag-handle--cat { opacity: 1; }
+  .adm-cat-row--active .adm-drag-handle--cat,
+  .adm-order-cat-chip--active .adm-drag-handle--cat { color: rgba(255,255,255,0.85); }
+
+  .adm-cat-row--drag-over,
+  .adm-order-cat-chip--drag-over {
+    border-color: var(--accent) !important;
+    background: #f0ecf8 !important;
+    box-shadow: 0 4px 12px rgba(77,44,123,0.12) !important;
+    transform: scale(1.02);
+  }
+  .adm-cat-row--dragging,
+  .adm-order-cat-chip--dragging { opacity: 0.4; }
+
   .adm-item--drag-over {
     border-color: var(--accent) !important;
     background: #f0ecf8 !important;
@@ -1198,6 +1348,7 @@ const CSS = `
     transform: scale(1.01);
   }
   .adm-item--dragging { opacity: 0.4; }
+
 
   .adm-item-type-dot {
     width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
@@ -1332,6 +1483,62 @@ const CSS = `
   }
   .adm-logout-btn:hover { background: #dc2626; color: #ffffff; }
 
+  /* ── Confirmation Modal ── */
+  .adm-modal-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(15, 10, 25, 0.5);
+    backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; animation: admFadeIn 0.15s ease-out;
+  }
+  @keyframes admFadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .adm-modal-card {
+    background: #ffffff; border-radius: 20px;
+    padding: 28px 32px; max-width: 420px; width: 100%;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+    display: flex; flex-direction: column; align-items: center; text-align: center;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    animation: admPopIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes admPopIn { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .adm-modal-icon {
+    font-size: 32px; line-height: 1; margin-bottom: 12px;
+    background: #fff5f5; width: 60px; height: 60px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #fee2e2;
+  }
+  .adm-modal-title {
+    font-size: 18px; font-weight: 700; color: #1a1020; margin-bottom: 8px;
+  }
+  .adm-modal-msg {
+    font-size: 13.5px; color: #555; line-height: 1.5; margin-bottom: 24px;
+    word-break: break-word;
+  }
+  .adm-modal-warn {
+    color: #dc2626; font-weight: 500; display: inline-block; margin-top: 4px;
+  }
+  .adm-modal-actions {
+    display: flex; gap: 12px; width: 100%;
+  }
+  .adm-modal-btn {
+    flex: 1; padding: 12px 18px; border-radius: 10px;
+    font-size: 14px; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: all 0.15s ease; border: none;
+  }
+  .adm-modal-btn--cancel {
+    background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb;
+  }
+  .adm-modal-btn--cancel:hover {
+    background: #e5e7eb; color: #111827;
+  }
+  .adm-modal-btn--danger {
+    background: #dc2626; color: #ffffff;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.25);
+  }
+  .adm-modal-btn--danger:hover {
+    background: #b91c1c; box-shadow: 0 6px 16px rgba(220, 38, 38, 0.35);
+  }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .adm { flex-direction: column; }
@@ -1342,3 +1549,4 @@ const CSS = `
     .adm-order-cats-panel { width: 100%; }
   }
 `;
+
