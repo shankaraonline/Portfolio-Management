@@ -24,9 +24,19 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function addCategory(name) {
+export function addCategory(name, description = '') {
   const d = getData();
-  d.categories.push({ id: uid(), name: name.trim(), items: [] });
+  d.categories.push({ id: uid(), name: name.trim(), description: description ? description.trim() : '', items: [] });
+  return save(d);
+}
+
+export function updateCategory(id, updatedFields) {
+  const d = getData();
+  const cat = d.categories.find(c => c.id === id);
+  if (cat) {
+    if (updatedFields.name !== undefined) cat.name = updatedFields.name.trim();
+    if (updatedFields.description !== undefined) cat.description = updatedFields.description.trim();
+  }
   return save(d);
 }
 

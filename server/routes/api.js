@@ -86,7 +86,7 @@ router.get('/portfolio', async (req, res) => {
 /* ── POST /api/categories ── */
 router.post('/categories', async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, description } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Category name is required' });
     }
@@ -94,6 +94,7 @@ router.post('/categories', async (req, res) => {
     const newCat = new Category({
       id: uid(),
       name: name.trim(),
+      description: description ? description.trim() : '',
       items: [],
       order: count
     });
@@ -102,6 +103,25 @@ router.post('/categories', async (req, res) => {
     res.status(201).json({ categories, category: newCat });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create category', message: err.message });
+  }
+});
+
+/* ── PUT /api/categories/:id ── */
+router.put('/categories/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description } = req.body;
+    const cat = await Category.findOne({ id });
+    if (!cat) {
+      return res.status(404).json({ error: 'Category not found' });
+    }
+    if (name !== undefined) cat.name = name.trim();
+    if (description !== undefined) cat.description = description.trim();
+    await cat.save();
+    const categories = await Category.find({}).sort({ order: 1, createdAt: 1 });
+    res.json({ categories, category: cat });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update category', message: err.message });
   }
 });
 

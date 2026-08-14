@@ -23,6 +23,7 @@ const itemSchema = new mongoose.Schema({
 const categorySchema = new mongoose.Schema({
   id: { type: String, required: true, unique: true },
   name: { type: String, required: true, trim: true },
+  description: { type: String, default: '', trim: true },
   items: [itemSchema],
   createdAt: { type: Date, default: Date.now }
 });
@@ -146,14 +147,30 @@ app.get('/api/portfolio', async (_req, res) => {
 /* ── POST /api/categories ── */
 app.post('/api/categories', verifyToken, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, description } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Category name is required' });
-    const newCat = new Category({ id: uid(), name: name.trim(), items: [] });
+    const newCat = new Category({ id: uid(), name: name.trim(), description: description ? description.trim() : '', items: [] });
     await newCat.save();
     const categories = await Category.find({}).sort({ createdAt: 1 });
     res.status(201).json({ categories, category: newCat });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create category', message: err.message });
+  }
+});
+
+/* ── PUT /api/categories/:id ── */
+app.put('/api/categories/:id', verifyToken, async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const cat = await Category.findOne({ id: req.params.id });
+    if (!cat) return res.status(404).json({ error: 'Category not found' });
+    if (name !== undefined) cat.name = name.trim();
+    if (description !== undefined) cat.description = description.trim();
+    await cat.save();
+    const categories = await Category.find({}).sort({ createdAt: 1 });
+    res.json({ categories, category: cat });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update category', message: err.message });
   }
 });
 

@@ -67,12 +67,6 @@ function YoutubeCard({ item }) {
 
   return (
     <div className={`yt-card ${isShort ? 'yt-card--short' : ''}`}>
-      {(item.heading || item.description) && (
-        <div className="card-body">
-          {item.heading && <p className="card-heading">{item.heading}</p>}
-          {item.description && <ExpandableDescription text={item.description} className="card-desc" />}
-        </div>
-      )}
       <div className={`yt-frame ${isShort ? 'yt-frame--short' : ''}`}>
         <iframe
           src={src}
@@ -82,6 +76,12 @@ function YoutubeCard({ item }) {
           className="yt-iframe"
         />
       </div>
+      {(item.heading || item.description) && (
+        <div className="card-body">
+          {item.heading && <h4 className="card-heading">{item.heading}</h4>}
+          {item.description && <ExpandableDescription text={item.description} className="card-desc" />}
+        </div>
+      )}
     </div>
   );
 }
@@ -113,12 +113,6 @@ function InstagramCard({ item, isStopped, onActivate }) {
 
   return (
     <div className="ig-card">
-      {(item.heading || item.description) && (
-        <div className="card-body">
-          {item.heading && <p className="card-heading">{item.heading}</p>}
-          {item.description && <ExpandableDescription text={item.description} className="card-desc" />}
-        </div>
-      )}
       <div className="ig-clip">
         <iframe
           ref={iframeRef}
@@ -269,9 +263,13 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
 
   const handleScroll = (direction) => {
     if (!trackRef.current) return;
-    const scrollAmount = trackRef.current.clientWidth * 0.75;
+    const firstItem = trackRef.current.querySelector('.pf-carousel-item');
+    const gap = 16;
+    const itemWidth = firstItem
+      ? firstItem.getBoundingClientRect().width + gap
+      : trackRef.current.clientWidth * 0.85;
     trackRef.current.scrollBy({
-      left: direction === 'left' ? -scrollAmount : scrollAmount,
+      left: direction === 'left' ? -itemWidth : itemWidth,
       behavior: 'smooth',
     });
   };
@@ -279,33 +277,39 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
   return (
     <section id={`cat-${cat.id}`} className="pf-cat-section">
       <div className="pf-cat-header">
-        <div className="pf-cat-pill" />
-        <h2 className="pf-cat-name">{cat.name}</h2>
-        <span className="pf-cat-count">{cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}</span>
+        <div className="pf-cat-header-top">
+          <div className="pf-cat-pill" />
+          <h2 className="pf-cat-name">{cat.name}</h2>
+          <span className="pf-cat-count">{cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}</span>
 
-        {(canScrollLeft || canScrollRight) && (
-          <div className="pf-cat-arrows">
-            <button
-              type="button"
-              className={`pf-cat-arrow-btn ${!canScrollLeft ? 'pf-cat-arrow-btn--disabled' : ''}`}
-              onClick={() => handleScroll('left')}
-              disabled={!canScrollLeft}
-              aria-label="Scroll left"
-              title="Previous items"
-            >
-              ‹
-            </button>
-            <button
-              type="button"
-              className={`pf-cat-arrow-btn ${!canScrollRight ? 'pf-cat-arrow-btn--disabled' : ''}`}
-              onClick={() => handleScroll('right')}
-              disabled={!canScrollRight}
-              aria-label="Scroll right"
-              title="Next items"
-            >
-              ›
-            </button>
-          </div>
+          {(canScrollLeft || canScrollRight) && (
+            <div className="pf-cat-arrows">
+              <button
+                type="button"
+                className={`pf-cat-arrow-btn ${!canScrollLeft ? 'pf-cat-arrow-btn--disabled' : ''}`}
+                onClick={() => handleScroll('left')}
+                disabled={!canScrollLeft}
+                aria-label="Scroll left"
+                title="Previous items"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className={`pf-cat-arrow-btn ${!canScrollRight ? 'pf-cat-arrow-btn--disabled' : ''}`}
+                onClick={() => handleScroll('right')}
+                disabled={!canScrollRight}
+                aria-label="Scroll right"
+                title="Next items"
+              >
+                ›
+              </button>
+            </div>
+          )}
+        </div>
+
+        {cat.description && (
+          <p className="pf-cat-desc">{cat.description}</p>
         )}
       </div>
 
@@ -480,6 +484,10 @@ export default function Portfolio() {
 
   const scrollToCategory = (catId) => {
     setSelectedCatId(catId);
+    const chip = document.querySelector(`.pf-mosaic-chip[data-cat-id="${catId}"]`);
+    if (chip) {
+      chip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
     const el = document.getElementById(`cat-${catId}`);
     if (el) {
       const headerH  = document.querySelector('.pf-header')?.offsetHeight  || 0;
@@ -647,6 +655,7 @@ export default function Portfolio() {
               return (
                 <button
                   key={cat.id}
+                  data-cat-id={cat.id}
                   className={`pf-mosaic-chip ${isActive ? 'pf-mosaic-chip--active' : ''}`}
                   onClick={() => scrollToCategory(cat.id)}
                 >
@@ -725,8 +734,6 @@ export default function Portfolio() {
 /* ─── Styles ──────────────────────────────────────────────────────────── */
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-
   .pf {
     --bg: #f4f5f9;
     --surface: #ffffff;
@@ -910,9 +917,23 @@ const CSS = `
   }
   .pf-cat-header {
     display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+  }
+  .pf-cat-header-top {
+    display: flex;
     align-items: center;
     gap: 12px;
-    margin-bottom: 18px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .pf-cat-desc {
+    margin: 8px 0 0 0;
+    font-size: 0.92rem;
+    color: var(--muted);
+    line-height: 1.5;
+    width: 100%;
+    max-width: 100%;
   }
   .pf-cat-pill {
     width: 5px;
@@ -927,6 +948,10 @@ const CSS = `
     color: #1a1020;
     margin: 0;
     letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
   .pf-cat-count {
     font-size: 12px;
@@ -935,11 +960,14 @@ const CSS = `
     background: #ede9f6;
     padding: 3px 10px;
     border-radius: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
   .pf-cat-arrows {
     margin-left: auto;
     display: flex;
     gap: 8px;
+    flex-shrink: 0;
   }
   .pf-cat-arrow-btn {
     width: 36px;
@@ -975,34 +1003,51 @@ const CSS = `
   }
   .pf-carousel-track {
     display: flex;
-    gap: 22px;
+    gap: 16px;
     overflow-x: auto;
     scroll-behavior: smooth;
     padding: 4px 2px 16px 2px;
     scrollbar-width: none;
     -ms-overflow-style: none;
     align-items: start;
+    scroll-snap-type: x mandatory;
   }
   .pf-carousel-track::-webkit-scrollbar {
     display: none;
   }
   .pf-carousel-item {
-    flex: 0 0 calc((100% - 66px) / 4);
-    min-width: 260px;
+    flex: 0 0 calc((100% - 48px) / 4);
+    min-width: 220px;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
   }
+
   @media (max-width: 1200px) {
     .pf-carousel-item {
-      flex: 0 0 calc((100% - 44px) / 3);
+      flex: 0 0 calc((100% - 32px) / 3);
     }
   }
   @media (max-width: 820px) {
     .pf-carousel-item {
-      flex: 0 0 calc((100% - 22px) / 2);
+      flex: 0 0 calc((100% - 16px) / 2);
+    }
+  }
+  @media (max-width: 768px) {
+    .pf-mosaic-wrap {
+      padding: 8px 16px;
+    }
+    .pf-mosaic-inner {
+      justify-content: flex-start;
+    }
+    .pf-cat-name {
+      font-size: 18px;
     }
   }
   @media (max-width: 540px) {
     .pf-carousel-item {
-      flex: 0 0 85%;
+      flex: 0 0 84%;
+      min-width: 84%;
+      scroll-snap-align: start;
     }
   }
 

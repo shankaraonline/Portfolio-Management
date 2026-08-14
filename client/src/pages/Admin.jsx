@@ -3,6 +3,7 @@ import { getData } from '../utils/storage';
 import {
   fetchPortfolioData,
   addCategoryApi,
+  updateCategoryApi,
   deleteCategoryApi,
   reorderCategoriesApi,
   addItemApi,
@@ -33,6 +34,10 @@ export default function Admin() {
   const [data, setData] = useState(getData);
   const [selectedCatId, setSelectedCatId] = useState(null);
   const [catInput, setCatInput] = useState('');
+  const [catDescInput, setCatDescInput] = useState('');
+  const [editingCatId, setEditingCatId] = useState(null);
+  const [editCatName, setEditCatName] = useState('');
+  const [editCatDesc, setEditCatDesc] = useState('');
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [addSuccess, setAddSuccess] = useState(false);
@@ -51,6 +56,36 @@ export default function Admin() {
   // Drag state for categories
   const [dragCatId, setDragCatId] = useState(null);
   const [dragOverCatId, setDragOverCatId] = useState(null);
+
+  // Sidebar resizing state (default 340px)
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('admin_sidebar_width');
+    return saved ? Math.min(Math.max(parseInt(saved, 10), 280), 650) : 340;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  const startResizingSidebar = (e) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+  };
+
+  useEffect(() => {
+    if (!isResizingSidebar) return;
+    const handleMouseMove = (e) => {
+      const newWidth = Math.min(Math.max(e.clientX, 280), 650);
+      setSidebarWidth(newWidth);
+      localStorage.setItem('admin_sidebar_width', newWidth.toString());
+    };
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false);
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingSidebar]);
 
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(() =>
@@ -97,11 +132,33 @@ export default function Admin() {
   const handleAddCat = async () => {
     const name = catInput.trim();
     if (!name) return;
-    const newData = await addCategoryApi(name);
+    const newData = await addCategoryApi(name, catDescInput.trim());
     const lastCat = newData.categories[newData.categories.length - 1];
     refresh(newData);
     if (lastCat) setSelectedCatId(lastCat.id);
     setCatInput('');
+    setCatDescInput('');
+  };
+
+  const handleStartEditCat = (e, cat) => {
+    if (e) e.stopPropagation();
+    setEditingCatId(cat.id);
+    setEditCatName(cat.name || '');
+    setEditCatDesc(cat.description || '');
+  };
+
+  const handleSaveEditCat = async () => {
+    if (!editCatName.trim() || !editingCatId) return;
+    const newData = await updateCategoryApi(editingCatId, {
+      name: editCatName.trim(),
+      description: editCatDesc.trim()
+    });
+    refresh(newData);
+    setEditingCatId(null);
+  };
+
+  const handleCancelEditCat = () => {
+    setEditingCatId(null);
   };
 
   const requestDeleteCat = (e, cat) => {
@@ -129,8 +186,8 @@ export default function Admin() {
     const itemData = {
       type: form.type,
       url: form.url.trim(),
-      heading: form.heading.trim(),
-      description: form.description.trim(),
+      heading: form.type === 'website' ? form.heading.trim() : '',
+      description: form.type === 'website' ? form.description.trim() : '',
       image: form.type === 'website' ? form.image.trim() : '',
     };
 
@@ -196,9 +253,8 @@ export default function Admin() {
     if (!editForm.url.trim()) { setEditError('URL is required.'); return; }
     const updatedFields = {
       url: editForm.url.trim(),
-      // heading and description now saved for ALL types
-      heading: editForm.heading.trim(),
-      description: editForm.description.trim(),
+      heading: itemType === 'website' ? editForm.heading.trim() : '',
+      description: itemType === 'website' ? editForm.description.trim() : '',
       image: itemType === 'website' ? editForm.image.trim() : '',
     };
     const newData = await updateItemApi(selectedCatId, itemId, updatedFields);
@@ -467,7 +523,7 @@ export default function Admin() {
       <style>{CSS}</style>
 
       {/* ── Sidebar ── */}
-      <aside className="adm-sidebar">
+      <aside className="adm-sidebar" style={{ width: `${sidebarWidth}px` }}>
         {/* Top Link & Logout */}
         <div className="adm-sidebar-top">
           <a href="#" className="adm-view-btn">← View Portfolio</a>
@@ -479,15 +535,21 @@ export default function Admin() {
         {/* Create Category */}
         <div className="adm-section">
           <p className="adm-section-label">Create Category</p>
-          <div className="adm-add-cat-row">
+          <div className="adm-add-cat-col">
             <input
               className="adm-input"
-              placeholder="Company name…"
+              placeholder="Category name…"
               value={catInput}
               onChange={e => setCatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleAddCat()}
             />
-            <button className="adm-btn-accent" onClick={handleAddCat}>+ Add</button>
+            <textarea
+              className="adm-textarea adm-textarea--sm"
+              placeholder="Category description (optional)…"
+              value={catDescInput}
+              onChange={e => setCatDescInput(e.target.value)}
+              rows={2}
+            />
+            <button className="adm-btn-accent" onClick={handleAddCat}>+ Add Category</button>
           </div>
         </div>
 
@@ -516,18 +578,33 @@ export default function Admin() {
                   <span className="adm-cat-name">{cat.name}</span>
                   <span className="adm-cat-badge">{cat.items.length} items</span>
                 </div>
-                <button
-                  className="adm-cat-del"
-                  onClick={(e) => requestDeleteCat(e, cat)}
-                  title="Delete category"
-                >
-                  Delete
-                </button>
+                <div className="adm-cat-btns">
+                  <button
+                    className="adm-cat-edit"
+                    onClick={(e) => handleStartEditCat(e, cat)}
+                    title="Edit category"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="adm-cat-del"
+                    onClick={(e) => requestDeleteCat(e, cat)}
+                    title="Delete category"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
-
         </div>
+
+        {/* Right edge drag-to-resize handle */}
+        <div
+          className={`adm-sidebar-resizer ${isResizingSidebar ? 'adm-sidebar-resizer--active' : ''}`}
+          onMouseDown={startResizingSidebar}
+          title="Click and drag right to widen sidebar"
+        />
       </aside>
 
       {/* ── Main ── */}
@@ -562,6 +639,14 @@ export default function Admin() {
             {/* Website: flat drag list */}
             {orderTab === 'website' && (
               <div className="adm-order-body">
+                <div className="adm-order-sec-header">
+                  <div className="adm-order-sec-pill">
+                    <WebsiteIcon size={18} />
+                    <span>Websites</span>
+                  </div>
+                  <div className="adm-order-sec-divider" />
+                </div>
+
                 {allWebsites.length === 0 ? (
                   <div className="adm-items-empty">
                     <p>No websites added yet.</p>
@@ -579,15 +664,34 @@ export default function Admin() {
                         onDrop={e => handleWebDrop(e, item.id, allWebsites)}
                         onDragEnd={() => { setDragId(null); setDragOverId(null); }}
                       >
-                        <div className="adm-drag-handle" title="Drag to reorder">⠿</div>
-                        {item.image && (
-                          <img src={item.image} alt={item.heading || 'preview'} className="adm-item-thumb" />
-                        )}
-                        <div className="adm-item-info">
-                          {item.heading && <span className="adm-item-heading">{item.heading}</span>}
-                          <p className="adm-item-url" title={item.url}>{item.url}</p>
-                          {item.description && <p className="adm-item-desc">{item.description}</p>}
+                        <div className="adm-item-card-header">
+                          <div className="adm-drag-handle" title="Drag to reorder">
+                            <svg width="12" height="18" viewBox="0 0 12 18" fill="none">
+                              <circle cx="3" cy="3" r="1.5" fill="#a0aec0"/>
+                              <circle cx="9" cy="3" r="1.5" fill="#a0aec0"/>
+                              <circle cx="3" cy="9" r="1.5" fill="#a0aec0"/>
+                              <circle cx="9" cy="9" r="1.5" fill="#a0aec0"/>
+                              <circle cx="3" cy="15" r="1.5" fill="#a0aec0"/>
+                              <circle cx="9" cy="15" r="1.5" fill="#a0aec0"/>
+                            </svg>
+                          </div>
+                          {item.image ? (
+                            <img src={item.image} alt={item.heading || 'preview'} className="adm-item-thumb" />
+                          ) : (
+                            <div className="adm-item-thumb-placeholder">
+                              <WebsiteIcon size={24} />
+                            </div>
+                          )}
+                          <div className="adm-item-card-main-info">
+                            {item.heading && <h4 className="adm-item-heading">{item.heading}</h4>}
+                            <p className="adm-item-url" title={item.url}>{item.url}</p>
+                          </div>
                         </div>
+                        {item.description && (
+                          <div className="adm-item-card-desc">
+                            <p className="adm-item-desc">{item.description}</p>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -639,9 +743,13 @@ export default function Admin() {
                     </div>
                   ) : (
                     <>
-                      <p className="adm-order-list-label">
-                        {data.categories.find(c => c.id === orderCatId)?.name} — drag to reorder
-                      </p>
+                      <div className="adm-order-sec-header">
+                        <div className="adm-order-sec-pill" style={orderTab === 'instagram' ? { borderColor: '#e1306c', color: '#e1306c', background: '#fdf0f4' } : { borderColor: '#ff0000', color: '#ff0000', background: '#fff0f0' }}>
+                          {orderTab === 'instagram' ? <InstagramIcon size={18} /> : <YoutubeIcon size={20} />}
+                          <span>{data.categories.find(c => c.id === orderCatId)?.name}</span>
+                        </div>
+                        <div className="adm-order-sec-divider" />
+                      </div>
                       <div className="adm-items-list">
                         {orderCatItems.map(item => (
                           <div
@@ -653,15 +761,34 @@ export default function Admin() {
                             onDrop={e => handleCatDrop(e, item.id, orderCatItems, orderCatId, orderTab)}
                             onDragEnd={() => { setDragId(null); setDragOverId(null); }}
                           >
-                            <div className="adm-drag-handle" title="Drag to reorder">⠿</div>
-                            <div className="adm-item-info">
-                              <div className="adm-item-top">
-                                <div className="adm-item-type-dot" style={{ background: TYPE_COLOR[item.type] }} />
-                                {item.heading && <span className="adm-item-heading">{item.heading}</span>}
+                            <div className="adm-item-card-header">
+                              <div className="adm-drag-handle" title="Drag to reorder">
+                                <svg width="12" height="18" viewBox="0 0 12 18" fill="none">
+                                  <circle cx="3" cy="3" r="1.5" fill="#a0aec0"/>
+                                  <circle cx="9" cy="3" r="1.5" fill="#a0aec0"/>
+                                  <circle cx="3" cy="9" r="1.5" fill="#a0aec0"/>
+                                  <circle cx="9" cy="9" r="1.5" fill="#a0aec0"/>
+                                  <circle cx="3" cy="15" r="1.5" fill="#a0aec0"/>
+                                  <circle cx="9" cy="15" r="1.5" fill="#a0aec0"/>
+                                </svg>
                               </div>
-                              <p className="adm-item-url" title={item.url}>{item.url}</p>
-                              {item.description && <p className="adm-item-desc">{item.description}</p>}
+                              {item.image && (
+                                <img src={item.image} alt={item.heading || 'preview'} className="adm-item-thumb" />
+                              )}
+                              <div className="adm-item-card-main-info">
+                                <div className="adm-item-type-badge" style={{ color: TYPE_COLOR[item.type] }}>
+                                  <span className="adm-item-dot" style={{ background: TYPE_COLOR[item.type] }} />
+                                  <span>{TYPE_OPTIONS.find(t => t.value === item.type)?.label || item.type}</span>
+                                </div>
+                                {item.heading && <h4 className="adm-item-heading">{item.heading}</h4>}
+                                <p className="adm-item-url" title={item.url}>{item.url}</p>
+                              </div>
                             </div>
+                            {item.description && (
+                              <div className="adm-item-card-desc">
+                                <p className="adm-item-desc">{item.description}</p>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -678,21 +805,33 @@ export default function Admin() {
           <>
             {/* Category title bar */}
             <div className="adm-main-header">
-              <div>
+              <div className="adm-header-actions-row">
+                <button
+                  className="adm-btn-edit-cat"
+                  onClick={(e) => handleStartEditCat(e, selectedCat)}
+                  title="Edit Category Name & Description"
+                >
+                  ✎ Edit Category
+                </button>
+                <button
+                  className="adm-close-btn"
+                  onClick={() => setSelectedCatId(null)}
+                  title="Deselect category"
+                  aria-label="Deselect category"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div className="adm-header-body">
                 <h2 className="adm-main-title">{selectedCat.name}</h2>
+                {selectedCat.description && (
+                  <p className="adm-main-cat-desc">{selectedCat.description}</p>
+                )}
                 <p className="adm-main-sub">{selectedCat.items.length} item{selectedCat.items.length !== 1 ? 's' : ''} · Category</p>
               </div>
-              <button
-                className="adm-close-btn"
-                onClick={() => setSelectedCatId(null)}
-                title="Deselect category"
-                aria-label="Deselect category"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
             </div>
 
             {/* Add Item Form */}
@@ -728,32 +867,36 @@ export default function Admin() {
                   />
                 </div>
 
-                {/* Heading — all types */}
-                <div className="adm-field">
-                  <label className="adm-label">
-                    Heading / Title <span className="adm-optional">(optional)</span>
-                  </label>
-                  <input
-                    className="adm-input"
-                    placeholder={form.type === 'website' ? 'e.g. Official Website' : 'e.g. Our latest creation'}
-                    value={form.heading}
-                    onChange={e => setForm(f => ({ ...f, heading: e.target.value }))}
-                  />
-                </div>
+                {/* Heading — website only */}
+                {form.type === 'website' && (
+                  <div className="adm-field">
+                    <label className="adm-label">
+                      Heading / Title <span className="adm-optional">(optional)</span>
+                    </label>
+                    <input
+                      className="adm-input"
+                      placeholder="e.g. Official Website"
+                      value={form.heading}
+                      onChange={e => setForm(f => ({ ...f, heading: e.target.value }))}
+                    />
+                  </div>
+                )}
 
-                {/* Description — all types */}
-                <div className="adm-field">
-                  <label className="adm-label">
-                    Description <span className="adm-optional">(optional)</span>
-                  </label>
-                  <textarea
-                    className="adm-textarea"
-                    placeholder="Short description shown below the card…"
-                    value={form.description}
-                    onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                    rows={2}
-                  />
-                </div>
+                {/* Description — website only */}
+                {form.type === 'website' && (
+                  <div className="adm-field">
+                    <label className="adm-label">
+                      Description <span className="adm-optional">(optional)</span>
+                    </label>
+                    <textarea
+                      className="adm-textarea"
+                      placeholder="Short description shown below the card…"
+                      value={form.description}
+                      onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                      rows={2}
+                    />
+                  </div>
+                )}
 
                 {/* Preview Image — website only */}
                 {form.type === 'website' && (
@@ -864,26 +1007,30 @@ export default function Admin() {
                               />
                             </div>
 
-                            {/* Heading — all types */}
-                            <div className="adm-field">
-                              <label className="adm-label">Heading / Title <span className="adm-optional">(optional)</span></label>
-                              <input
-                                className="adm-input"
-                                value={editForm.heading}
-                                onChange={e => setEditForm(f => ({ ...f, heading: e.target.value }))}
-                              />
-                            </div>
+                            {/* Heading — website only */}
+                            {item.type === 'website' && (
+                              <div className="adm-field">
+                                <label className="adm-label">Heading / Title <span className="adm-optional">(optional)</span></label>
+                                <input
+                                  className="adm-input"
+                                  value={editForm.heading}
+                                  onChange={e => setEditForm(f => ({ ...f, heading: e.target.value }))}
+                                />
+                              </div>
+                            )}
 
-                            {/* Description — all types */}
-                            <div className="adm-field">
-                              <label className="adm-label">Description <span className="adm-optional">(optional)</span></label>
-                              <textarea
-                                className="adm-textarea"
-                                value={editForm.description}
-                                onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                                rows={2}
-                              />
-                            </div>
+                            {/* Description — website only */}
+                            {item.type === 'website' && (
+                              <div className="adm-field">
+                                <label className="adm-label">Description <span className="adm-optional">(optional)</span></label>
+                                <textarea
+                                  className="adm-textarea"
+                                  value={editForm.description}
+                                  onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                                  rows={2}
+                                />
+                              </div>
+                            )}
 
                             {/* Image — website only */}
                             {item.type === 'website' && (
@@ -951,42 +1098,43 @@ export default function Admin() {
 
                     return (
                       <div key={item.id} className="adm-item">
-                        {/* Show thumbnail for website items */}
-                        {item.type === 'website' && item.image && (
-                          <img src={item.image} alt={item.heading || 'preview'} className="adm-item-thumb" />
-                        )}
-                        <div
-                          className="adm-item-type-dot"
-                          style={{ background: TYPE_COLOR[item.type] || '#666' }}
-                          title={item.type}
-                        />
-                        <div className="adm-item-info">
-                          <div className="adm-item-top">
-                            <span
-                              className="adm-item-type-label"
-                              style={{ color: TYPE_COLOR[item.type] }}
-                            >
-                              {TYPE_OPTIONS.find(t => t.value === item.type)?.label || item.type}
-                            </span>
-                            {item.heading && <span className="adm-item-heading">{item.heading}</span>}
+                        <div className="adm-item-card-header">
+                          {item.type === 'website' && item.image ? (
+                            <img src={item.image} alt={item.heading || 'preview'} className="adm-item-thumb" />
+                          ) : item.type === 'website' ? (
+                            <div className="adm-item-thumb-placeholder">
+                              <WebsiteIcon size={24} />
+                            </div>
+                          ) : null}
+
+                          <div className="adm-item-card-main-info">
+                            <div className="adm-item-type-badge" style={{ color: TYPE_COLOR[item.type] || '#00b4d8' }}>
+                              <span className="adm-item-dot" style={{ background: TYPE_COLOR[item.type] || '#00b4d8' }} />
+                              <span>{TYPE_OPTIONS.find(t => t.value === item.type)?.label || item.type}</span>
+                            </div>
+                            {item.heading && <h4 className="adm-item-heading">{item.heading}</h4>}
+                            <p className="adm-item-url" title={item.url}>{item.url}</p>
                           </div>
-                          <p className="adm-item-url" title={item.url}>{item.url}</p>
-                          {item.description && (
+
+                          <div className="adm-item-actions">
+                            <button
+                              className="adm-item-edit-btn"
+                              onClick={() => handleStartEdit(item)}
+                              title="Edit item"
+                            >Edit</button>
+                            <button
+                              className="adm-item-delete-btn"
+                              onClick={() => requestDeleteItem(selectedCat.id, item)}
+                              title="Delete item"
+                            >Delete</button>
+                          </div>
+                        </div>
+
+                        {item.description && (
+                          <div className="adm-item-card-desc">
                             <p className="adm-item-desc">{item.description}</p>
-                          )}
-                        </div>
-                        <div className="adm-item-actions">
-                          <button
-                            className="adm-item-edit"
-                            onClick={() => handleStartEdit(item)}
-                            title="Edit item"
-                          >Edit</button>
-                          <button
-                            className="adm-item-delete"
-                            onClick={() => requestDeleteItem(selectedCat.id, item)}
-                            title="Delete item"
-                          >Delete</button>
-                        </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -1042,6 +1190,44 @@ export default function Admin() {
           </div>
         </div>
       )}
+
+      {/* ── Category Edit Modal ── */}
+      {editingCatId && (
+        <div className="adm-modal-overlay" onClick={handleCancelEditCat}>
+          <div className="adm-modal-card adm-modal-card--form" onClick={e => e.stopPropagation()}>
+            <h3 className="adm-modal-title">Edit Category</h3>
+            <div className="adm-field" style={{ marginTop: 16 }}>
+              <label className="adm-label">Category Name <span className="adm-req">*</span></label>
+              <input
+                className="adm-input"
+                placeholder="Category name…"
+                value={editCatName}
+                onChange={e => setEditCatName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveEditCat()}
+                autoFocus
+              />
+            </div>
+            <div className="adm-field" style={{ marginTop: 14 }}>
+              <label className="adm-label">Category Description <span className="adm-optional">(optional)</span></label>
+              <textarea
+                className="adm-textarea"
+                placeholder="Description shown below category name on portfolio page…"
+                value={editCatDesc}
+                onChange={e => setEditCatDesc(e.target.value)}
+                rows={4}
+              />
+            </div>
+            <div className="adm-modal-actions" style={{ marginTop: 24 }}>
+              <button type="button" className="adm-modal-btn adm-modal-btn--cancel" onClick={handleCancelEditCat}>
+                Cancel
+              </button>
+              <button type="button" className="adm-btn-accent" style={{ flex: 1, padding: '12px 20px', borderRadius: 10 }} onClick={handleSaveEditCat}>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1070,12 +1256,28 @@ const CSS = `
 
   /* ── Sidebar ── */
   .adm-sidebar {
-    width: 280px; min-height: 100vh;
+    position: relative;
+    min-height: 100vh;
     background: var(--sidebar-bg);
     border-right: 1px solid var(--border);
     display: flex; flex-direction: column;
     position: sticky; top: 0; height: 100vh; overflow-y: auto;
     box-shadow: 2px 0 12px rgba(0,0,0,0.03);
+    flex-shrink: 0;
+  }
+  .adm-sidebar-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 6px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 50;
+    transition: background 0.15s;
+  }
+  .adm-sidebar-resizer:hover,
+  .adm-sidebar-resizer--active {
+    background: rgba(77, 44, 123, 0.4);
   }
   .adm-sidebar-top {
     padding: 16px;
@@ -1155,10 +1357,13 @@ const CSS = `
   .adm-main { flex: 1; padding: 40px 48px; overflow-y: auto; }
 
   /* ── Main header ── */
-  .adm-main-header { margin-bottom: 32px; display: flex; align-items: center; justify-content: space-between; }
+  .adm-main-header { margin-bottom: 28px; display: flex; flex-direction: column; gap: 8px; }
+  .adm-header-actions-row { display: flex; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; }
+  .adm-header-body { display: flex; flex-direction: column; gap: 4px; width: 100%; }
   .adm-main-title {
     font-family: 'Space Grotesk', sans-serif;
-    font-size: 32px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px; color: #1a1020;
+    font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: #1a1020; margin: 0;
+    word-break: break-word;
   }
   .adm-main-sub { font-size: 13px; color: var(--muted); font-weight: 500; }
   .adm-saving { color: var(--accent); font-style: italic; }
@@ -1167,7 +1372,7 @@ const CSS = `
     display: flex; align-items: center; justify-content: center;
     color: var(--muted); background: #ffffff; border: 1px solid var(--border);
     cursor: pointer; transition: all 0.18s ease;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05); flex-shrink: 0;
   }
   .adm-close-btn:hover { color: #dc2626; border-color: rgba(220,38,38,0.3); background: #fef2f2; transform: scale(1.08); }
 
@@ -1307,20 +1512,67 @@ const CSS = `
     background: var(--surface); border-radius: 14px; border: 1px solid var(--border);
     display: flex; flex-direction: column; gap: 6px;
   }
-  .adm-items-list { display: flex; flex-direction: column; gap: 10px; }
-  .adm-item {
-    display: flex; align-items: flex-start; gap: 14px;
-    background: var(--surface); border-radius: 13px; padding: 16px;
-    border: 1px solid var(--border); transition: all 0.15s;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+  .adm-order-sec-header {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
   }
-  .adm-item:hover { background: #fcfbfe; border-color: var(--accent); }
+  .adm-order-sec-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 24px;
+    border: 1.5px solid #00b4d8;
+    background: #eefbfe;
+    color: #00b4d8;
+    font-size: 13px;
+    font-weight: 600;
+    width: fit-content;
+  }
+  .adm-order-sec-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    width: 100%;
+  }
+
+  .adm-items-list { display: flex; flex-direction: column; gap: 14px; }
+  .adm-item {
+    display: flex;
+    flex-direction: column;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    transition: all 0.18s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.02);
+    gap: 12px;
+  }
+  .adm-item:hover {
+    background: #ffffff;
+    border-color: rgba(77, 44, 123, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.05);
+  }
+
+  .adm-item-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    width: 100%;
+  }
 
   /* ── Drag ── */
   .adm-drag-handle {
-    cursor: grab; color: #c0b8cc; font-size: 20px;
-    padding: 0 2px; user-select: none; flex-shrink: 0;
-    display: flex; align-items: center; line-height: 1; margin-top: 2px;
+    cursor: grab;
+    color: #a0aec0;
+    padding: 2px;
+    user-select: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
   }
   .adm-drag-handle:active { cursor: grabbing; }
   .adm-drag-handle--cat {
@@ -1349,36 +1601,119 @@ const CSS = `
   }
   .adm-item--dragging { opacity: 0.4; }
 
+  .adm-item-thumb {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 14px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    flex-shrink: 0;
+  }
+  .adm-item-thumb-placeholder {
+    width: 64px;
+    height: 64px;
+    border-radius: 14px;
+    background: #f0ecf8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border: 1px solid rgba(77, 44, 123, 0.12);
+  }
 
-  .adm-item-type-dot {
-    width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; margin-top: 5px;
+  .adm-item-card-main-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
   }
-  .adm-item-info { flex: 1; overflow: hidden; display: flex; flex-direction: column; gap: 4px; }
-  .adm-item-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .adm-item-type-label { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
-  .adm-item-heading { font-size: 13px; font-weight: 600; color: var(--text); }
+  .adm-item-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+  .adm-item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  .adm-item-heading {
+    font-size: 16px;
+    font-weight: 700;
+    color: #1a1020;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .adm-item-url {
-    font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 12px;
+    color: #718096;
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
-  .adm-item-desc { font-size: 12px; color: var(--muted); }
-  .adm-item-delete {
-    flex-shrink: 0; padding: 6px 12px; border-radius: 7px;
-    font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
-    border: 1px solid rgba(220,38,38,0.2);
-    background: rgba(220,38,38,0.06); color: var(--danger);
-    transition: background 0.15s;
+
+  .adm-item-card-desc {
+    width: 100%;
   }
-  .adm-item-delete:hover { background: rgba(220,38,38,0.15); }
-  .adm-item-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-  .adm-item-edit {
-    padding: 6px 12px; border-radius: 7px;
-    font-size: 12px; font-weight: 500; cursor: pointer; font-family: inherit;
-    border: 1px solid rgba(77,44,123,0.2);
-    background: rgba(77,44,123,0.06); color: var(--accent);
-    transition: all 0.15s;
+  .adm-item-desc {
+    font-size: 13.5px;
+    color: #4a5563;
+    line-height: 1.5;
+    word-break: break-word;
   }
-  .adm-item-edit:hover { background: #4d2c7b; color: #ffffff; }
+
+  .adm-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+  .adm-item-edit-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    border: 1px solid rgba(77, 44, 123, 0.2);
+    background: #f0ecf8;
+    color: #4d2c7b;
+    transition: all 0.18s ease;
+  }
+  .adm-item-edit-btn:hover {
+    background: #4d2c7b;
+    color: #ffffff;
+    border-color: #4d2c7b;
+  }
+
+  .adm-item-delete-btn {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    border: 1px solid rgba(220, 38, 38, 0.2);
+    background: #fef2f2;
+    color: #dc2626;
+    transition: all 0.18s ease;
+  }
+  .adm-item-delete-btn:hover {
+    background: #dc2626;
+    color: #ffffff;
+    border-color: #dc2626;
+  }
 
   .adm-item--editing {
     border-color: var(--accent) !important;
@@ -1401,12 +1736,6 @@ const CSS = `
   }
   .adm-btn-cancel:hover { color: var(--text); background: #f3f4f6; }
 
-  /* Thumbnail in items list */
-  .adm-item-thumb {
-    width: 72px; height: 46px; object-fit: cover;
-    border-radius: 7px; flex-shrink: 0; margin-top: 2px;
-    border: 1px solid var(--border);
-  }
 
   /* Image upload */
   .adm-img-upload-btn {
@@ -1539,14 +1868,100 @@ const CSS = `
     background: #b91c1c; box-shadow: 0 6px 16px rgba(220, 38, 38, 0.35);
   }
 
+  /* ── Form Modal styling ── */
+  .adm-modal-card--form {
+    max-width: 540px;
+    width: 92%;
+    align-items: stretch;
+    text-align: left;
+    padding: 32px 36px;
+  }
+  .adm-modal-card--form .adm-modal-title {
+    text-align: center;
+    font-size: 20px;
+    margin-bottom: 4px;
+  }
+  .adm-modal-card--form .adm-field {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .adm-modal-card--form .adm-label {
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+    color: #1a1020;
+  }
+  .adm-modal-card--form .adm-input {
+    width: 100%;
+    height: 44px;
+    font-size: 14px;
+    padding: 0 14px;
+    border-radius: 10px;
+  }
+  .adm-modal-card--form .adm-textarea {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 14px;
+    min-height: 100px;
+    resize: vertical;
+    border-radius: 10px;
+  }
+
+  /* ── Category Description & Edit styles ── */
+  .adm-add-cat-col { display: flex; flex-direction: column; gap: 8px; }
+  .adm-textarea--sm { min-height: 52px; font-size: 13px; padding: 8px 10px; resize: vertical; font-family: inherit; }
+  .adm-cat-subdesc { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 120px; display: block; margin-top: 1px; }
+  .adm-cat-btns { display: flex; gap: 6px; align-items: center; }
+  
+  .adm-cat-edit {
+    font-size: 11px; font-weight: 600; color: var(--accent);
+    background: rgba(77,44,123,0.08); border: 1px solid rgba(77,44,123,0.2);
+    padding: 4px 8px; border-radius: 6px; cursor: pointer; font-family: inherit;
+    transition: all 0.15s; flex-shrink: 0;
+  }
+  .adm-cat-edit:hover { background: var(--accent); color: #ffffff; }
+
+  .adm-cat-row--active .adm-cat-subdesc { color: rgba(255,255,255,0.75); }
+  .adm-cat-row--active .adm-cat-edit {
+    color: #ffffff; background: rgba(255,255,255,0.2); border-color: rgba(255,255,255,0.35);
+  }
+  .adm-cat-row--active .adm-cat-edit:hover {
+    background: #ffffff; color: var(--accent); border-color: #ffffff;
+  }
+
+  .adm-main-cat-desc { font-size: 14px; color: var(--muted); margin: 4px 0 6px; line-height: 1.4; }
+  .adm-header-btns { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-top: 2px; }
+  .adm-btn-edit-cat {
+    font-size: 13px; font-weight: 600; color: var(--accent);
+    background: #f0ecf8; border: 1px solid rgba(77,44,123,0.2);
+    padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    transition: all 0.2s; font-family: inherit; white-space: nowrap; flex-shrink: 0;
+  }
+  .adm-btn-edit-cat:hover { background: var(--accent); color: white; }
+  .adm-btn-sec { padding: 8px 16px; border-radius: 8px; background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .adm-btn-sec:hover { background: #e5e7eb; color: #111827; }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .adm { flex-direction: column; }
-    .adm-sidebar { width: 100%; height: auto; position: relative; }
-    .adm-main { padding: 28px 20px; }
-    .adm-cats { max-height: 200px; }
+    .adm-sidebar { width: 100% !important; min-height: auto; height: auto; position: relative; border-right: none; border-bottom: 1px solid var(--border); box-shadow: none; }
+    .adm-sidebar-resizer { display: none; }
+    .adm-section--grow { flex: initial; }
+    .adm-cats { flex: initial; max-height: none; overflow-y: visible; }
+    .adm-main { padding: 16px 12px; }
     .adm-order-split { flex-direction: column; }
     .adm-order-cats-panel { width: 100%; }
+    .adm-item { padding: 14px; gap: 10px; border-radius: 12px; }
+    .adm-item-card-header { gap: 10px; }
+    .adm-item-thumb { width: 50px; height: 50px; border-radius: 10px; }
+    .adm-item-thumb-placeholder { width: 50px; height: 50px; border-radius: 10px; }
+    .adm-item-heading { font-size: 14px; white-space: normal; }
+    .adm-item-url { font-size: 11px; white-space: normal; word-break: break-all; }
+    .adm-item-actions { flex-direction: row; gap: 6px; }
+    .adm-item-edit-btn, .adm-item-delete-btn { padding: 5px 10px; font-size: 11px; }
+    .adm-item-desc { font-size: 12.5px; }
   }
 `;
 

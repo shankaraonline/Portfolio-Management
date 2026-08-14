@@ -1,4 +1,4 @@
-import { getData as getLocalData, addCategory as addLocalCat, deleteCategory as deleteLocalCat, reorderCategories as reorderLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
+import { getData as getLocalData, addCategory as addLocalCat, updateCategory as updateLocalCat, deleteCategory as deleteLocalCat, reorderCategories as reorderLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
 
 
 const getApiBase = () => {
@@ -62,19 +62,36 @@ export async function fetchPortfolioData() {
 }
 
 /* ── Add Category ── */
-export async function addCategoryApi(name) {
+export async function addCategoryApi(name, description = '') {
   try {
     const res = await fetch(`${API_BASE}/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, description }),
     });
     if (!res.ok) throw new Error('Failed to create category');
     const data = await res.json();
     return { ...getLocalData(), categories: data.categories };
   } catch (err) {
     console.warn('⚠️ Server error, writing to local storage:', err.message);
-    return addLocalCat(name);
+    return addLocalCat(name, description);
+  }
+}
+
+/* ── Update Category ── */
+export async function updateCategoryApi(id, updatedFields) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(updatedFields),
+    });
+    if (!res.ok) throw new Error('Failed to update category');
+    const data = await res.json();
+    return { ...getLocalData(), categories: data.categories };
+  } catch (err) {
+    console.warn('⚠️ Server error, updating local storage:', err.message);
+    return updateLocalCat(id, updatedFields);
   }
 }
 
