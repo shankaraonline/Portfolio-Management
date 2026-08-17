@@ -23,7 +23,40 @@ function getHostname(url) {
   catch { return url; }
 }
 
-/* ─── Expandable Description Helper ──────────────────────────────────── */
+/* ─── Expandable Category Description ────────────────────────────────── */
+
+function ExpandableCatDescription({ text }) {
+  const [expanded, setExpanded] = useState(false);
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const textRef = useRef(null);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    // Check if text overflows 2 lines
+    setNeedsClamp(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  return (
+    <div className="pf-cat-desc-wrap">
+      <p
+        ref={textRef}
+        className={`pf-cat-desc ${expanded ? 'pf-cat-desc--expanded' : ''}`}
+      >
+        {text}
+      </p>
+      {needsClamp && (
+        <button
+          type="button"
+          className="pf-cat-desc-toggle"
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          {expanded ? 'Read Less' : 'Read More'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function ExpandableDescription({ text, className = 'card-desc' }) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -292,7 +325,7 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
                 aria-label="Scroll left"
                 title="Previous items"
               >
-                ‹
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
               </button>
               <button
                 type="button"
@@ -302,14 +335,14 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
                 aria-label="Scroll right"
                 title="Next items"
               >
-                ›
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
           )}
         </div>
 
         {cat.description && (
-          <p className="pf-cat-desc">{cat.description}</p>
+          <ExpandableCatDescription text={cat.description} />
         )}
       </div>
 
@@ -321,7 +354,7 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
             onClick={() => handleScroll('left')}
             aria-label="Scroll left"
           >
-            ‹
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
         )}
 
@@ -350,7 +383,7 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
             onClick={() => handleScroll('right')}
             aria-label="Scroll right"
           >
-            ›
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         )}
       </div>
@@ -927,13 +960,39 @@ const CSS = `
     width: 100%;
     flex-wrap: nowrap;
   }
-  .pf-cat-desc {
+  .pf-cat-desc-wrap {
     margin: 8px 0 0 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  .pf-cat-desc {
+    margin: 0;
     font-size: 0.92rem;
     color: var(--muted);
     line-height: 1.5;
-    width: 100%;
-    max-width: 100%;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pf-cat-desc--expanded {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+  .pf-cat-desc-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 4px;
+    color: #4d2c7b;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .pf-cat-desc-toggle:hover {
+    color: #6b3fa0;
+    text-decoration: underline;
   }
   .pf-cat-pill {
     width: 5px;
@@ -976,8 +1035,6 @@ const CSS = `
     background: #ffffff;
     border: 1px solid var(--border);
     color: #4d2c7b;
-    font-size: 22px;
-    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1063,8 +1120,6 @@ const CSS = `
     border: 1px solid rgba(0,0,0,0.12);
     box-shadow: 0 4px 16px rgba(0,0,0,0.15);
     color: #4d2c7b;
-    font-size: 26px;
-    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
