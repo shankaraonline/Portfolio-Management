@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { getData } from '../utils/storage';
 import { fetchPortfolioData } from '../utils/api';
 
@@ -23,6 +23,72 @@ function getHostname(url) {
   catch { return url; }
 }
 
+/* ─── Expandable Category Description ────────────────────────────────── */
+
+function ExpandableCatDescription({ text }) {
+  const [expanded, setExpanded] = useState(false);
+  const [needsClamp, setNeedsClamp] = useState(false);
+  const textRef = useRef(null);
+
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el) return;
+    // Check if text overflows 2 lines
+    setNeedsClamp(el.scrollHeight > el.clientHeight + 1);
+  }, [text]);
+
+  return (
+    <div className="pf-cat-desc-wrap">
+      <p
+        ref={textRef}
+        className={`pf-cat-desc ${expanded ? 'pf-cat-desc--expanded' : ''}`}
+      >
+        {text}
+      </p>
+      {needsClamp && (
+        <button
+          type="button"
+          className="pf-cat-desc-toggle"
+          onClick={() => setExpanded(prev => !prev)}
+        >
+          {expanded ? 'Read Less' : 'Read More'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function ExpandableDescription({ text, className = 'card-desc' }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!text) return null;
+
+  const isLong = text.length > 90 || text.includes('\n');
+
+  const handleToggle = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsExpanded(prev => !prev);
+  };
+
+  return (
+    <div className="desc-wrap">
+      <p className={`${className} ${isExpanded ? 'desc-expanded' : 'desc-clamped'}`}>
+        {text}
+      </p>
+      {isLong && (
+        <button
+          type="button"
+          className="read-more-btn"
+          onClick={handleToggle}
+        >
+          {isExpanded ? 'Read Less' : 'Read More'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /* ─── YouTube Card ────────────────────────────────────────────────────── */
 
 function YoutubeCard({ item }) {
@@ -45,8 +111,8 @@ function YoutubeCard({ item }) {
       </div>
       {(item.heading || item.description) && (
         <div className="card-body">
-          {item.heading && <p className="card-heading">{item.heading}</p>}
-          {item.description && <p className="card-desc">{item.description}</p>}
+          {item.heading && <h4 className="card-heading">{item.heading}</h4>}
+          {item.description && <ExpandableDescription text={item.description} className="card-desc" />}
         </div>
       )}
     </div>
@@ -102,12 +168,6 @@ function InstagramCard({ item, isStopped, onActivate }) {
           </div>
         )}
       </div>
-      {(item.heading || item.description) && (
-        <div className="card-body">
-          {item.heading && <p className="card-heading">{item.heading}</p>}
-          {item.description && <p className="card-desc">{item.description}</p>}
-        </div>
-      )}
     </div>
   );
 }
@@ -135,7 +195,7 @@ function WebsiteCard({ item }) {
       {/* Content */}
       <div className="site-body">
         {item.heading && <p className="site-heading">{item.heading}</p>}
-        {item.description && <p className="site-desc">{item.description}</p>}
+        {item.description && <ExpandableDescription text={item.description} className="site-desc" />}
         <div className="site-visit-row">
           <span className="site-visit-btn">Visit ↗</span>
         </div>
@@ -204,6 +264,130 @@ export function BehanceIcon({ size = 18 }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="#1769ff" xmlns="http://www.w3.org/2000/svg" style={{ verticalAlign: 'middle', display: 'inline-block' }}>
       <path d="M22 7h-7v-2h7v2zm-11.708 3.791c.729-.464 1.208-1.2 1.208-2.146 0-1.896-1.583-2.645-3.666-2.645h-5.834v12h6.166c2.479 0 4.125-.979 4.125-3.271 0-1.771-1.041-2.771-2.001-3.938zm-5.292-2.791h2.583c.917 0 1.583.25 1.583 1.083 0 .875-.666 1.125-1.583 1.125h-2.583v-2.208zm2.833 7h-2.833v-2.5h2.833c1.041 0 1.75.292 1.75 1.25 0 .979-.709 1.25-1.75 1.25zm12.333-3.417h-5.166c.125 1.208 1.041 1.75 2.166 1.75.917 0 1.625-.333 1.958-.833h2.333c-.583 1.833-2.25 2.667-4.291 2.667-2.917 0-4.708-1.958-4.708-4.667 0-2.625 1.791-4.625 4.625-4.625 2.917 0 4.417 2.083 4.417 4.542 0 .417-.042.833-.083 1.166zm-4.791-1.833h2.875c-.166-.875-.791-1.375-1.458-1.375-.708 0-1.292.5-1.417 1.375z"/>
     </svg>
+  );
+}
+
+/* ─── Category Carousel Section ───────────────────────────────────────── */
+
+function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) {
+  const trackRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    if (!trackRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = trackRef.current;
+    setCanScrollLeft(scrollLeft > 5);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 5);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const el = trackRef.current;
+    if (el) {
+      el.addEventListener('scroll', checkScroll);
+      window.addEventListener('resize', checkScroll);
+    }
+    return () => {
+      if (el) el.removeEventListener('scroll', checkScroll);
+      window.removeEventListener('resize', checkScroll);
+    };
+  }, [cat.items, checkScroll]);
+
+  const handleScroll = (direction) => {
+    if (!trackRef.current) return;
+    const firstItem = trackRef.current.querySelector('.pf-carousel-item');
+    const gap = 16;
+    const itemWidth = firstItem
+      ? firstItem.getBoundingClientRect().width + gap
+      : trackRef.current.clientWidth * 0.85;
+    trackRef.current.scrollBy({
+      left: direction === 'left' ? -itemWidth : itemWidth,
+      behavior: 'smooth',
+    });
+  };
+
+  return (
+    <section id={`cat-${cat.id}`} className="pf-cat-section">
+      <div className="pf-cat-header">
+        <div className="pf-cat-header-top">
+          <div className="pf-cat-pill" />
+          <h2 className="pf-cat-name">{cat.name}</h2>
+          <span className="pf-cat-count">{cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}</span>
+
+          {(canScrollLeft || canScrollRight) && (
+            <div className="pf-cat-arrows">
+              <button
+                type="button"
+                className={`pf-cat-arrow-btn ${!canScrollLeft ? 'pf-cat-arrow-btn--disabled' : ''}`}
+                onClick={() => handleScroll('left')}
+                disabled={!canScrollLeft}
+                aria-label="Scroll left"
+                title="Previous items"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+              <button
+                type="button"
+                className={`pf-cat-arrow-btn ${!canScrollRight ? 'pf-cat-arrow-btn--disabled' : ''}`}
+                onClick={() => handleScroll('right')}
+                disabled={!canScrollRight}
+                aria-label="Scroll right"
+                title="Next items"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
+            </div>
+          )}
+        </div>
+
+        {cat.description && (
+          <ExpandableCatDescription text={cat.description} />
+        )}
+      </div>
+
+      <div className="pf-carousel-wrapper">
+        {canScrollLeft && (
+          <button
+            type="button"
+            className="pf-float-arrow pf-float-arrow--left"
+            onClick={() => handleScroll('left')}
+            aria-label="Scroll left"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+        )}
+
+        <div className="pf-carousel-track" ref={trackRef}>
+          {type === 'instagram' && cat.items.map(item => (
+            <div key={item.id} className="pf-carousel-item">
+              <InstagramCard
+                item={item}
+                isActive={activeReelId === item.id}
+                isStopped={stoppedIds.includes(item.id)}
+                onActivate={() => activateReel(item.id)}
+              />
+            </div>
+          ))}
+          {type === 'youtube' && cat.items.map(item => (
+            <div key={item.id} className="pf-carousel-item">
+              <YoutubeCard item={item} />
+            </div>
+          ))}
+        </div>
+
+        {canScrollRight && (
+          <button
+            type="button"
+            className="pf-float-arrow pf-float-arrow--right"
+            onClick={() => handleScroll('right')}
+            aria-label="Scroll right"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -329,19 +513,34 @@ export default function Portfolio() {
     .map(cat => ({ ...cat, items: cat.items.filter(i => i.type === tab.type) }))
     .filter(cat => cat.items.length > 0);
 
-  // Active category defaults to the first category if available
-  const activeCatId = selectedCatId && relevantCats.some(c => c.id === selectedCatId)
-    ? selectedCatId
-    : (relevantCats[0]?.id || null);
+  const activeCatId = selectedCatId || (relevantCats[0]?.id || null);
 
-  const displayedCats = activeCatId
-    ? relevantCats.filter(cat => cat.id === activeCatId)
-    : relevantCats;
+  const scrollToCategory = (catId) => {
+    setSelectedCatId(catId);
+    const chip = document.querySelector(`.pf-mosaic-chip[data-cat-id="${catId}"]`);
+    if (chip) {
+      chip.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+    const el = document.getElementById(`cat-${catId}`);
+    if (el) {
+      const headerH  = document.querySelector('.pf-header')?.offsetHeight  || 0;
+      const tabsH    = document.querySelector('.pf-tabs')?.offsetHeight    || 0;
+      const mosaicH  = document.querySelector('.pf-mosaic-wrap')?.offsetHeight || 0;
+      const yOffset  = -(headerH + tabsH + mosaicH + 16); // 16 px breathing room
+      const y = el.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
 
-  const websiteItems = data.categories
-    .flatMap(cat => cat.items.filter(i => i.type === 'website'));
-
-  const videoItems = displayedCats.flatMap(cat => cat.items);
+  const websiteItems = useMemo(() => {
+    const all = data.categories.flatMap(cat => cat.items.filter(i => i.type === 'website'));
+    const order = data.websiteOrder || [];
+    if (!order.length) return all;
+    return [
+      ...order.map(id => all.find(w => w.id === id)).filter(Boolean),
+      ...all.filter(w => !order.includes(w.id))
+    ];
+  }, [data]);
 
 
   if (isLoading) {
@@ -489,8 +688,9 @@ export default function Portfolio() {
               return (
                 <button
                   key={cat.id}
+                  data-cat-id={cat.id}
                   className={`pf-mosaic-chip ${isActive ? 'pf-mosaic-chip--active' : ''}`}
-                  onClick={() => { resetPlayback(); setSelectedCatId(cat.id); }}
+                  onClick={() => scrollToCategory(cat.id)}
                 >
                   <span className="pf-chip-label">{cat.name}</span>
                 </button>
@@ -521,7 +721,7 @@ export default function Portfolio() {
             </section>
           )
         ) : (
-          videoItems.length === 0 ? (
+          relevantCats.length === 0 ? (
             <div className="pf-empty">
               <div className="pf-empty-icon">{tab.icon}</div>
               <p className="pf-empty-title">No {tab.label} content yet</p>
@@ -530,22 +730,16 @@ export default function Portfolio() {
               </p>
             </div>
           ) : (
-            <section className="pf-cat">
-              <div className={`pf-grid pf-grid--${activeTab}`}>
-                {activeTab === 'instagram' && videoItems.map(item => (
-                  <InstagramCard
-                    key={item.id}
-                    item={item}
-                    isActive={activeReelId === item.id}
-                    isStopped={stoppedIds.includes(item.id)}
-                    onActivate={() => activateReel(item.id)}
-                  />
-                ))}
-                {activeTab === 'youtube' && videoItems.map(item => (
-                  <YoutubeCard key={item.id} item={item} />
-                ))}
-              </div>
-            </section>
+            relevantCats.map(cat => (
+              <CategorySection
+                key={cat.id}
+                cat={cat}
+                type={activeTab}
+                activeReelId={activeReelId}
+                stoppedIds={stoppedIds}
+                activateReel={activateReel}
+              />
+            ))
           )
         )}
       </main>
@@ -573,8 +767,6 @@ export default function Portfolio() {
 /* ─── Styles ──────────────────────────────────────────────────────────── */
 
 const CSS = `
-  @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
-
   .pf {
     --bg: #f4f5f9;
     --surface: #ffffff;
@@ -683,86 +875,277 @@ const CSS = `
 
   /* ── Mosaic Category Subnav ── */
   .pf-mosaic-wrap {
-    background: transparent;
-    padding: 14px 40px 0;
+    position: sticky;
+    top: 126px;  /* 73px header + ~53px tabs */
+    z-index: 89;
+    background: var(--bg);
+    padding: 10px 40px;
+    border-bottom: 1px solid rgba(0,0,0,0.06);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    overflow: hidden;
   }
   .pf-mosaic-inner {
-    max-width: 1440px; margin: 0 auto;
-    display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+    max-width: 1440px;
+    margin: 0 auto;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding: 2px 2px 6px 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .pf-mosaic-inner::-webkit-scrollbar {
+    display: none;
   }
   .pf-mosaic-chip {
-    display: inline-flex; align-items: center;
-    padding: 9px 20px; border-radius: 999px;
-    font-size: 13px; font-weight: 600; font-family: 'Poppins', sans-serif; letter-spacing: 0.01em;
-    color: #4d2c7b; background: #ffffff;
-    border: 1.5px solid #c4aee8; cursor: pointer;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Poppins', sans-serif;
+    letter-spacing: 0.01em;
+    color: #4d2c7b;
+    background: #ffffff;
+    border: 1.5px solid #c4aee8;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: all 0.18s ease;
     user-select: none;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .pf-chip-label { flex: 1; white-space: nowrap; }
   .pf-mosaic-chip:hover {
     background: #ede9f6;
     color: #3b1f5e;
     border-color: #9b72d0;
-    box-shadow: 0 4px 14px rgba(77,44,123,0.15);
+    box-shadow: 0 3px 10px rgba(77,44,123,0.15);
   }
   .pf-mosaic-chip--active {
     background: #4d2c7b;
     color: #ffffff;
     border-color: #4d2c7b;
-    box-shadow: 0 4px 16px rgba(77,44,123,0.28);
+    box-shadow: 0 3px 12px rgba(77,44,123,0.25);
   }
   .pf-mosaic-chip--active:hover {
     background: #4d2c7b;
     color: #ffffff;
     border-color: #4d2c7b;
-    box-shadow: 0 4px 16px rgba(77,44,123,0.28);
+    box-shadow: 0 3px 12px rgba(77,44,123,0.25);
   }
 
   /* ── Main ── */
-  .pf-main { max-width: 1440px; margin: 0 auto; padding: 20px 40px 40px; }
+  .pf-main { max-width: 1440px; margin: 0 auto; padding: 24px 40px 40px; }
 
-  /* ── Category ── */
-  .pf-cat { margin-bottom: 72px; }
-  .pf-cat-header {
-    display: flex; align-items: center; gap: 14px;
-    margin-bottom: 28px;
+  /* ── Category Section & Carousel ── */
+  .pf-cat-section {
+    margin-bottom: 48px;
+    scroll-margin-top: 140px;
   }
-  .pf-cat-pill { width: 5px; height: 32px; border-radius: 3px; flex-shrink: 0; background: #4d2c7b !important; }
+  .pf-cat-header {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 18px;
+  }
+  .pf-cat-header-top {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    flex-wrap: nowrap;
+  }
+  .pf-cat-desc-wrap {
+    margin: 8px 0 0 0;
+    width: 100%;
+    max-width: 100%;
+  }
+  .pf-cat-desc {
+    margin: 0;
+    font-size: 0.92rem;
+    color: var(--muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .pf-cat-desc--expanded {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
+  .pf-cat-desc-toggle {
+    background: none;
+    border: none;
+    padding: 0;
+    margin-top: 4px;
+    color: #4d2c7b;
+    font-size: 0.84rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .pf-cat-desc-toggle:hover {
+    color: #6b3fa0;
+    text-decoration: underline;
+  }
+  .pf-cat-pill {
+    width: 5px;
+    height: 28px;
+    border-radius: 3px;
+    background: #4d2c7b;
+    flex-shrink: 0;
+  }
   .pf-cat-name {
-    font-family: 'Space Grotesk', sans-serif;
-    font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: #1a1020;
+    font-size: 22px;
+    font-weight: 700;
+    color: #1a1020;
+    margin: 0;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
   .pf-cat-count {
-    font-size: 12px; color: var(--muted);
-    background: #ede9f6; color: #4d2c7b; font-weight: 600;
-    padding: 4px 10px; border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4d2c7b;
+    background: #ede9f6;
+    padding: 3px 10px;
+    border-radius: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .pf-cat-arrows {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .pf-cat-arrow-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    color: #4d2c7b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.18s ease;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  .pf-cat-arrow-btn:hover:not(.pf-cat-arrow-btn--disabled) {
+    background: #4d2c7b;
+    color: #ffffff;
+    border-color: #4d2c7b;
+    box-shadow: 0 4px 12px rgba(77,44,123,0.25);
+  }
+  .pf-cat-arrow-btn--disabled {
+    opacity: 0.3;
+    cursor: default;
   }
 
-  /* ── Grids ── */
-  .pf-grid--videos {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-    align-items: start;
+  .pf-carousel-wrapper {
+    position: relative;
+    width: 100%;
   }
-  .pf-grid--instagram {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 22px;
+  .pf-carousel-track {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    scroll-behavior: smooth;
+    padding: 4px 2px 16px 2px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
     align-items: start;
+    scroll-snap-type: x mandatory;
   }
-  .pf-grid--youtube {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 22px;
-    align-items: start;
+  .pf-carousel-track::-webkit-scrollbar {
+    display: none;
   }
+  .pf-carousel-item {
+    flex: 0 0 calc((100% - 48px) / 4);
+    min-width: 220px;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  @media (max-width: 1200px) {
+    .pf-carousel-item {
+      flex: 0 0 calc((100% - 32px) / 3);
+    }
+  }
+  @media (max-width: 820px) {
+    .pf-carousel-item {
+      flex: 0 0 calc((100% - 16px) / 2);
+    }
+  }
+  @media (max-width: 768px) {
+    .pf-mosaic-wrap {
+      padding: 8px 16px;
+    }
+    .pf-mosaic-inner {
+      justify-content: flex-start;
+    }
+    .pf-cat-name {
+      font-size: 18px;
+    }
+  }
+  @media (max-width: 540px) {
+    .pf-carousel-item {
+      flex: 0 0 84%;
+      min-width: 84%;
+      scroll-snap-align: start;
+    }
+  }
+
+  .pf-float-arrow {
+    position: absolute;
+    top: calc(50% - 10px);
+    transform: translateY(-50%);
+    z-index: 20;
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 1px solid rgba(0,0,0,0.12);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    color: #4d2c7b;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.2s ease;
+  }
+  .pf-float-arrow:hover {
+    background: #4d2c7b;
+    color: #ffffff;
+    border-color: #4d2c7b;
+    transform: translateY(-50%) scale(1.1);
+    box-shadow: 0 6px 20px rgba(77,44,123,0.3);
+  }
+  .pf-float-arrow--left {
+    left: -16px;
+  }
+  .pf-float-arrow--right {
+    right: -16px;
+  }
+
   .pf-grid--websites {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 20px;
+    align-items: start;
   }
 
   /* ── YouTube Card ── */
@@ -824,7 +1207,7 @@ const CSS = `
     width: 100%;
     aspect-ratio: 9 / 16;
     overflow: hidden;
-    background: #000;
+    background: #ffffff;
     border-radius: 14px;
   }
   .ig-iframe {
@@ -835,6 +1218,7 @@ const CSS = `
     border: 0;
     display: block;
   }
+
   /* Play / Replay overlay — only shown on stopped (blank) reels */
   .ig-replay-overlay {
     position: absolute;
@@ -876,7 +1260,41 @@ const CSS = `
   }
   .card-desc {
     font-size: 12px; color: var(--muted); margin: 0;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    line-height: 1.5;
+  }
+
+  /* ── Expandable Description ── */
+  .desc-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+  .desc-clamped {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .desc-expanded {
+    display: block;
+    overflow: visible;
+  }
+  .read-more-btn {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin-top: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4d2c7b;
+    cursor: pointer;
+    line-height: 1.4;
+    transition: color 0.15s ease, text-decoration 0.15s ease;
+  }
+  .read-more-btn:hover {
+    color: #7b42c3;
+    text-decoration: underline;
   }
 
   /* ── Website Card ── */
@@ -888,7 +1306,6 @@ const CSS = `
     overflow: hidden;
     cursor: pointer; transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
     text-decoration: none; color: inherit;
-    height: 100%;
   }
   .site-card:hover {
     border-color: #4d2c7b;
@@ -927,7 +1344,6 @@ const CSS = `
   }
   .site-desc {
     font-size: 13px; color: var(--muted);
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
     line-height: 1.5; flex: 1; margin: 0;
   }
   .site-visit-row {
@@ -1033,6 +1449,8 @@ const CSS = `
     .pf-cat-name { font-size: 21px; }
     .pf-main { padding: 16px 18px 24px; }
     .pf-header-inner { padding: 12px 18px; }
+    /* On mobile tabs are hidden — mosaic sits right below the header (~68px) */
+    .pf-mosaic-wrap { padding: 8px 16px; top: 68px; }
   }
   @media (max-width: 480px) {
     .pf-grid--websites { grid-template-columns: 1fr; }

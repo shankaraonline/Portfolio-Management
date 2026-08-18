@@ -24,15 +24,36 @@ function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
-export function addCategory(name) {
+export function addCategory(name, description = '') {
   const d = getData();
-  d.categories.push({ id: uid(), name: name.trim(), items: [] });
+  d.categories.push({ id: uid(), name: name.trim(), description: description ? description.trim() : '', items: [] });
+  return save(d);
+}
+
+export function updateCategory(id, updatedFields) {
+  const d = getData();
+  const cat = d.categories.find(c => c.id === id);
+  if (cat) {
+    if (updatedFields.name !== undefined) cat.name = updatedFields.name.trim();
+    if (updatedFields.description !== undefined) cat.description = updatedFields.description.trim();
+  }
   return save(d);
 }
 
 export function deleteCategory(id) {
   const d = getData();
   d.categories = d.categories.filter(c => c.id !== id);
+  return save(d);
+}
+
+export function reorderCategories(categoryIds) {
+  const d = getData();
+  const catMap = new Map(d.categories.map(c => [c.id, c]));
+  const reordered = categoryIds.map(id => catMap.get(id)).filter(Boolean);
+  d.categories.forEach(c => {
+    if (!categoryIds.includes(c.id)) reordered.push(c);
+  });
+  d.categories = reordered;
   return save(d);
 }
 

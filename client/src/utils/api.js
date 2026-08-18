@@ -1,4 +1,5 @@
-import { getData as getLocalData, addCategory as addLocalCat, deleteCategory as deleteLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
+import { getData as getLocalData, addCategory as addLocalCat, updateCategory as updateLocalCat, deleteCategory as deleteLocalCat, reorderCategories as reorderLocalCat, addItem as addLocalItem, deleteItem as deleteLocalItem, updateItem as updateLocalItem } from './storage.js';
+
 
 const getApiBase = () => {
   if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
@@ -49,7 +50,11 @@ export async function fetchPortfolioData() {
     const res = await fetch(`${API_BASE}/portfolio`, { signal: AbortSignal.timeout(10000) });
     if (!res.ok) throw new Error('API server returned error status');
     const data = await res.json();
-    return { ...getLocalData(), categories: data.categories || [] };
+    return {
+      ...getLocalData(),
+      categories: data.categories || [],
+      websiteOrder: data.settings?.websiteOrder || []
+    };
   } catch (err) {
     console.warn('⚠️ Server unreachable, using local storage fallback:', err.message);
     return getLocalData();
@@ -57,19 +62,36 @@ export async function fetchPortfolioData() {
 }
 
 /* ── Add Category ── */
-export async function addCategoryApi(name) {
+export async function addCategoryApi(name, description = '') {
   try {
     const res = await fetch(`${API_BASE}/categories`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, description }),
     });
     if (!res.ok) throw new Error('Failed to create category');
     const data = await res.json();
     return { ...getLocalData(), categories: data.categories };
   } catch (err) {
     console.warn('⚠️ Server error, writing to local storage:', err.message);
-    return addLocalCat(name);
+    return addLocalCat(name, description);
+  }
+}
+
+/* ── Update Category ── */
+export async function updateCategoryApi(id, updatedFields) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify(updatedFields),
+    });
+    if (!res.ok) throw new Error('Failed to update category');
+    const data = await res.json();
+    return { ...getLocalData(), categories: data.categories };
+  } catch (err) {
+    console.warn('⚠️ Server error, updating local storage:', err.message);
+    return updateLocalCat(id, updatedFields);
   }
 }
 
@@ -86,6 +108,23 @@ export async function deleteCategoryApi(id) {
   } catch (err) {
     console.warn('⚠️ Server error, updating local storage:', err.message);
     return deleteLocalCat(id);
+  }
+}
+
+/* ── Reorder Categories ── */
+export async function reorderCategoriesApi(categoryIds) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ categoryIds }),
+    });
+    if (!res.ok) throw new Error('Failed to reorder categories');
+    const data = await res.json();
+    return { ...getLocalData(), categories: data.categories };
+  } catch (err) {
+    console.warn('⚠️ Server error, reordering in local storage:', err.message);
+    return reorderLocalCat(categoryIds);
   }
 }
 
@@ -136,5 +175,38 @@ export async function deleteItemApi(catId, itemId) {
   } catch (err) {
     console.warn('⚠️ Server error, deleting item from local storage:', err.message);
     return deleteLocalItem(catId, itemId);
+  }
+}
+
+/* ── Reorder Items in a Category (by type) ── */
+export async function reorderCategoryItemsApi(catId, type, itemIds) {
+  try {
+    const res = await fetch(`${API_BASE}/categories/${catId}/reorder`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ type, itemIds }),
+    });
+    if (!res.ok) throw new Error('Failed to reorder items');
+    const data = await res.json();
+    return data.categories || null;
+  } catch (err) {
+    console.warn('⚠️ Server error on reorder:', err.message);
+    return null;
+  }
+}
+
+/* ── Update Global Website Display Order ── */
+export async function updateWebsiteOrderApi(itemIds) {
+  try {
+    const res = await fetch(`${API_BASE}/settings/website-order`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+      body: JSON.stringify({ itemIds }),
+    });
+    if (!res.ok) throw new Error('Failed to update website order');
+    return true;
+  } catch (err) {
+    console.warn('⚠️ Server error on website order update:', err.message);
+    return false;
   }
 }
