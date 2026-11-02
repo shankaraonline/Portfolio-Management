@@ -12,10 +12,29 @@ function getYtId(url) {
   return m ? m[1] : null;
 }
 
-function getIgEmbed(url) {
-  if (!url) return null;
-  const m = url.match(/instagram\.com\/(reel|p|tv)\/([a-zA-Z0-9_-]+)/);
-  return m ? `https://www.instagram.com/${m[1]}/${m[2]}/embed/` : null;
+/**
+ * Parses an Instagram Reel or Post URL and generates the clean embed URL.
+ * Supports URLs like:
+ * - https://www.instagram.com/reel/C8xyz123/
+ * - https://instagram.com/reel/C8xyz123/?igsh=...
+ * - https://www.instagram.com/p/C8xyz123/
+ * - https://www.instagram.com/tv/C8xyz123/
+ * - https://instagr.am/reel/C8xyz123/
+ * - https://www.instagram.com/share/reel/C8xyz123/
+ */
+function getIgEmbed(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return null;
+
+  // Match /reel/CODE or /reels/CODE or /p/CODE or /tv/CODE or /share/reel/CODE
+  const match = trimmed.match(/(?:instagram\.com|instagr\.am)\/(?:reel|reels|p|tv|share\/reel)\/([a-zA-Z0-9_-]+)/i);
+  if (match && match[1]) return `https://www.instagram.com/reel/${match[1]}/embed/`;
+
+  // Passthrough if already an embed URL
+  if (trimmed.includes('instagram.com') && trimmed.includes('/embed')) return trimmed;
+
+  return null;
 }
 
 function getHostname(url) {
@@ -121,53 +140,20 @@ function YoutubeCard({ item }) {
 
 /* ─── Instagram Card ──────────────────────────────────────────────────── */
 
-function InstagramCard({ item, isStopped, onActivate }) {
+function InstagramCard({ item }) {
   const embed = getIgEmbed(item.url);
-  const iframeRef = useRef(null);
-
-  // When the user clicks INSIDE this iframe, the parent window loses focus
-  // and document.activeElement becomes this iframe element.
-  // We use this to detect interaction without needing a click-blocking overlay.
-  useEffect(() => {
-    const handleWindowBlur = () => {
-      if (document.activeElement === iframeRef.current) {
-        onActivate();
-      }
-    };
-    window.addEventListener('blur', handleWindowBlur);
-    return () => window.removeEventListener('blur', handleWindowBlur);
-  }, [onActivate]);
-
   if (!embed) return null;
-
-  // Stopped reels (previously played, now paused) get a blank src to kill audio.
-  // Fresh reels keep their normal src so Instagram loads the thumbnail.
-  const src = isStopped ? 'about:blank' : `${embed}?hidecaption=true`;
 
   return (
     <div className="ig-card">
-      <div className="ig-clip">
-        <iframe
-          ref={iframeRef}
-          src={src}
-          title={item.heading || 'Instagram reel'}
-          scrolling="no"
-          allowTransparency="true"
-          allow="encrypted-media; autoplay"
-          className="ig-iframe"
-        />
-        {/* Only stopped reels show a replay overlay */}
-        {isStopped && (
-          <div className="ig-replay-overlay" onClick={onActivate}>
-            <div className="ig-play-btn">
-              <svg viewBox="0 0 24 24" width="28" height="28" fill="white">
-                <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
-              </svg>
-            </div>
-            <span className="ig-replay-label">Tap to replay</span>
-          </div>
-        )}
-      </div>
+      <iframe
+        src={`${embed}?hidecaption=true`}
+        title={item.heading || 'Instagram reel'}
+        scrolling="no"
+        allowTransparency="true"
+        allow="encrypted-media; autoplay"
+        className="ig-iframe"
+      />
     </div>
   );
 }
@@ -308,12 +294,15 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
   };
 
   return (
-    <section id={`cat-${cat.id}`} className="pf-cat-section">
+    <section id={`cat-${cat.id}`} className={`pf-cat-section${type === 'instagram' ? ' pf-cat-section--ig' : ''}`}>
+      {/* Category name: always show for all types */}
       <div className="pf-cat-header">
         <div className="pf-cat-header-top">
           <div className="pf-cat-pill" />
           <h2 className="pf-cat-name">{cat.name}</h2>
-          <span className="pf-cat-count">{cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}</span>
+          {type !== 'instagram' && (
+            <span className="pf-cat-count">{cat.items.length} {cat.items.length === 1 ? 'item' : 'items'}</span>
+          )}
 
           {(canScrollLeft || canScrollRight) && (
             <div className="pf-cat-arrows">
@@ -341,7 +330,7 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
           )}
         </div>
 
-        {cat.description && (
+        {type !== 'instagram' && cat.description && (
           <ExpandableCatDescription text={cat.description} />
         )}
       </div>
@@ -361,12 +350,7 @@ function CategorySection({ cat, type, activeReelId, stoppedIds, activateReel }) 
         <div className="pf-carousel-track" ref={trackRef}>
           {type === 'instagram' && cat.items.map(item => (
             <div key={item.id} className="pf-carousel-item">
-              <InstagramCard
-                item={item}
-                isActive={activeReelId === item.id}
-                isStopped={stoppedIds.includes(item.id)}
-                onActivate={() => activateReel(item.id)}
-              />
+              <InstagramCard item={item} />
             </div>
           ))}
           {type === 'youtube' && cat.items.map(item => (
@@ -1193,64 +1177,114 @@ const CSS = `
   .mute-btn:hover { transform: scale(1.12); background: rgba(77,44,123,0.92); }
 
   /* ── Instagram Card ── */
-  .ig-card {
-    background: var(--surface); border-radius: 16px;
-    overflow: hidden; border: 1px solid var(--border);
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-    transition: transform 0.2s, box-shadow 0.2s;
+  /* Distinct spacing & padding between Instagram categories */
+  .pf-cat-section--ig {
+    margin-bottom: 48px;
+    padding-top: 16px;
   }
-  .ig-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(77,44,123,0.15); }
+  .pf-cat-section--ig:first-of-type {
+    padding-top: 6px;
+  }
+  .pf-cat-section--ig .pf-cat-header {
+    margin-bottom: 22px;
+  }
+  .pf-cat-section--ig .pf-carousel-wrapper {
+    padding: 0;
+  }
+  .pf-cat-section--ig .pf-carousel-track {
+    gap: 16px;
+    padding: 8px 4px 16px 4px;
+  }
+  /* Instagram: 250px width, 350px height - 6 visible in grid */
+  .pf-cat-section--ig .pf-carousel-item {
+    flex: 0 0 250px;
+    width: 250px;
+    min-width: 250px;
+    scroll-snap-align: start;
+  }
+  @media (max-width: 1680px) {
+    .pf-cat-section--ig .pf-carousel-item {
+      flex: 0 0 calc((100% - 5 * 14px) / 6);
+      width: calc((100% - 5 * 14px) / 6);
+      min-width: 200px;
+    }
+  }
+  @media (max-width: 1300px) {
+    .pf-cat-section--ig .pf-carousel-item {
+      flex: 0 0 calc((100% - 4 * 12px) / 5);
+      width: calc((100% - 4 * 12px) / 5);
+      min-width: 180px;
+    }
+  }
+  @media (max-width: 960px) {
+    .pf-cat-section--ig .pf-carousel-item {
+      flex: 0 0 calc((100% - 3 * 10px) / 4);
+      width: calc((100% - 3 * 10px) / 4);
+      min-width: 160px;
+    }
+  }
+  @media (max-width: 720px) {
+    .pf-cat-section--ig .pf-carousel-item {
+      flex: 0 0 calc((100% - 2 * 10px) / 3);
+      width: calc((100% - 2 * 10px) / 3);
+      min-width: 140px;
+    }
+  }
+  @media (max-width: 480px) {
+    .pf-cat-section--ig .pf-carousel-item {
+      flex: 0 0 68%;
+      width: 68%;
+    }
+  }
 
-  /* Instagram Clip: native 9:16 aspect ratio framing */
-  .ig-clip {
+  /* ── Instagram Card (250px x 350px Full-Bleed Video Frame) ────────────
+   *
+   * FULL BLEED "COVER" EFFECT (NO BLACK BARS ON SIDES):
+   * Inside Instagram's embed, the 9:16 vertical reel occupies only ~70%
+   * of the iframe width with black pillarbox bars on the left and right.
+   *
+   * By setting:
+   *   • Card: width 250px (100%), height 350px
+   *   • Iframe: width 148%, left: -24%
+   * The left and right black bars are pushed completely outside the card,
+   * so the video expands to COVER the entire card width edge-to-edge!
+   *
+   * Top offset (-78px) pushes out Instagram's top header.
+   * Height 350px ends well before Instagram's footer starts.
+   * Result: 100% clean full-bleed vertical video with rounded corners!
+   */
+  .ig-card {
     position: relative;
     width: 100%;
-    aspect-ratio: 9 / 16;
+    max-width: 250px;
+    height: 350px;
     overflow: hidden;
-    background: #ffffff;
-    border-radius: 14px;
+    border-radius: 18px;
+    background: #000;
+    border: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+    transition: transform 0.25s cubic-bezier(.34,1.56,.64,1), box-shadow 0.25s;
+    transform: translateZ(0);
   }
+  .ig-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: 0 14px 36px rgba(77,44,123,0.22);
+  }
+
   .ig-iframe {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    /* Scale width & center horizontally to completely crop out left & right black bars */
+    width: 148%;
+    left: -24%;
+    /* Shift up to hide Instagram's top header bar */
+    top: -78px;
+    /* Height to ensure video covers 350px card and pushes footer below */
+    height: 800px;
     border: 0;
     display: block;
   }
 
-  /* Play / Replay overlay — only shown on stopped (blank) reels */
-  .ig-replay-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 3;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    background: rgba(0,0,0,0.72);
-    transition: background 0.2s;
-  }
-  .ig-replay-overlay:hover { background: rgba(0,0,0,0.82); }
-  .ig-play-btn {
-    width: 62px; height: 62px;
-    border-radius: 50%;
-    background: rgba(255,255,255,0.15);
-    border: 2px solid rgba(255,255,255,0.5);
-    display: flex; align-items: center; justify-content: center;
-    transition: transform 0.18s, background 0.18s;
-  }
-  .ig-replay-overlay:hover .ig-play-btn {
-    transform: scale(1.1);
-    background: rgba(255,255,255,0.25);
-  }
-  .ig-replay-label {
-    color: rgba(255,255,255,0.85);
-    font-size: 12px; font-weight: 500;
-    letter-spacing: 0.3px;
-  }
+
 
   /* ── Card body (shared) ── */
   .card-body { padding: 14px 16px; }
